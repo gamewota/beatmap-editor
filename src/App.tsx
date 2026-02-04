@@ -25,6 +25,7 @@ function App() {
   const [bpm, setBpm] = useState(120)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [snapDivision, setSnapDivision] = useState<number>(4)
+  const [zoom, setZoom] = useState(100)
   const [notes, setNotes] = useState<Note[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -213,17 +214,19 @@ function App() {
           </div>
           <div className='flex items-center gap-4 ml-2'>
             <Icon url={magnifier}/>
-            <Slider defaultValue={10} min={0} max={100} className="range" />
+            <Slider value={zoom} min={50} max={1000} onChange={setZoom} className="range" />
+            <span className='text-xs text-gray-600 min-w-12'>{zoom}%</span>
           </div>
         </div>
       </section>
       <section className='flex justify-center mt-4'>
-        <div className='w-full h-40 border-2 rounded-md'>
+        <div className='w-full h-40 border-2 rounded-md overflow-x-auto'>
           <Waveform 
             audioBuffer={audioBuffer} 
             currentTime={currentTime} 
             duration={duration}
             onSeek={handleSeek}
+            zoom={zoom}
             className='w-full h-20' 
           />
         </div>
@@ -237,6 +240,7 @@ function App() {
           bpm={bpm}
           snapEnabled={snapEnabled}
           snapDivision={snapDivision}
+          zoom={zoom}
           className="w-full"
         />
       </section>

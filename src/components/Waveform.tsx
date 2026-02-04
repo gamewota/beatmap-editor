@@ -5,10 +5,11 @@ interface WaveformProps {
   currentTime?: number
   duration?: number
   onSeek?: (time: number) => void
+  zoom?: number
   className?: string
 }
 
-export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, onSeek, className = '' }: WaveformProps) {
+export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, onSeek, zoom = 100, className = '' }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -115,7 +116,7 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
     <canvas
       ref={canvasRef}
       className={`${className} ${duration > 0 ? 'cursor-pointer' : ''}`}
-      style={{ width: '100%', height: '100%' }}
+      style={{ width: `${zoom}%`, height: '100%', minWidth: '100%' }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

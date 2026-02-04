@@ -18,6 +18,7 @@ interface BeatmapEditorProps {
   bpm?: number
   snapEnabled?: boolean
   snapDivision?: number
+  zoom?: number
   className?: string
 }
 
@@ -29,6 +30,7 @@ export default function BeatmapEditor({
   bpm = 120,
   snapEnabled = true,
   snapDivision = 4,
+  zoom = 100,
   className = '' 
 }: BeatmapEditorProps) {
   const [selectedNoteType, setSelectedNoteType] = useState<NoteType>('tap')
@@ -53,16 +55,18 @@ export default function BeatmapEditor({
     updateWidth()
     window.addEventListener('resize', updateWidth)
     return () => window.removeEventListener('resize', updateWidth)
-  }, [])
+  }, [zoom])
 
   const timeToPixel = (time: number): number => {
     if (containerWidth === 0 || duration === 0) return 0
-    return (time / duration) * containerWidth
+    const baseWidth = containerWidth / (zoom / 100)
+    return (time / duration) * baseWidth * (zoom / 100)
   }
 
   const pixelToTime = (pixel: number): number => {
     if (containerWidth === 0 || duration === 0) return 0
-    return (pixel / containerWidth) * duration
+    const baseWidth = containerWidth / (zoom / 100)
+    return (pixel / (baseWidth * (zoom / 100))) * duration
   }
 
   const snapToGrid = (time: number): number => {
@@ -232,13 +236,14 @@ export default function BeatmapEditor({
         </button>
       </div>
 
-      <div
-        ref={containerRef}
-        className="relative border-2 rounded-md overflow-hidden bg-gray-900"
-        style={{ height: `${LANES * LANE_HEIGHT}px` }}
-      >
-        {/* Beat Grid Lines */}
-        {beatGridLines.map((line, index) => {
+      <div className="relative border-2 rounded-md overflow-x-auto bg-gray-900">
+        <div
+          ref={containerRef}
+          className="relative overflow-hidden"
+          style={{ height: `${LANES * LANE_HEIGHT}px`, width: `${zoom}%`, minWidth: '100%' }}
+        >
+          {/* Beat Grid Lines */}
+          {beatGridLines.map((line, index) => {
           const x = timeToPixel(line.time)
           return (
             <div
@@ -304,6 +309,7 @@ export default function BeatmapEditor({
             style={{ left: `${playheadPosition}px` }}
           />
         )}
+        </div>
       </div>
 
       <div className="mt-2 text-sm text-gray-600">
