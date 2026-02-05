@@ -7,7 +7,7 @@ export interface Note {
   lane: number
   time: number
   type: NoteType
-  duration?: number // for hold notes
+  duration?: number 
 }
 
 interface BeatmapEditorProps {
@@ -41,6 +41,7 @@ export default function BeatmapEditor({
   const [hoveredLane, setHoveredLane] = useState<number | null>(null)
   const [ghostNotePosition, setGhostNotePosition] = useState<{ lane: number; time: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const LANES = 5
   const LANE_HEIGHT = 60
@@ -56,17 +57,17 @@ export default function BeatmapEditor({
     window.addEventListener('resize', updateWidth)
     return () => window.removeEventListener('resize', updateWidth)
   }, [zoom])
-
+  
   const timeToPixel = (time: number): number => {
     if (containerWidth === 0 || duration === 0) return 0
-    const baseWidth = containerWidth / (zoom / 100)
-    return (time / duration) * baseWidth * (zoom / 100)
+    const pixelsPerSecond = containerWidth / duration
+    return time * pixelsPerSecond
   }
 
   const pixelToTime = (pixel: number): number => {
     if (containerWidth === 0 || duration === 0) return 0
-    const baseWidth = containerWidth / (zoom / 100)
-    return (pixel / (baseWidth * (zoom / 100))) * duration
+    const pixelsPerSecond = containerWidth / duration
+    return pixel / pixelsPerSecond
   }
 
   const snapToGrid = (time: number): number => {
@@ -92,7 +93,6 @@ export default function BeatmapEditor({
       onNotesChange([...notes, newNote])
     } else if (selectedNoteType === 'hold') {
       if (!isPlacingHold) {
-        // Start placing hold note
         setIsPlacingHold(true)
         setHoldStartTime(clickTime)
         setHoldStartLane(laneIndex)
@@ -108,7 +108,6 @@ export default function BeatmapEditor({
         onNotesChange([...notes, newNote])
         setIsPlacingHold(false)
       } else {
-        // Cancel if clicking different lane
         setIsPlacingHold(false)
       }
     }
@@ -199,6 +198,26 @@ export default function BeatmapEditor({
 
   const beatGridLines = getBeatGridLines()
 
+  useEffect(() => {
+    if (!scrollContainerRef.current || containerWidth === 0 || duration === 0) return
+    
+    const scrollContainer = scrollContainerRef.current
+    const pixelsPerSecond = containerWidth / duration
+    const playheadX = currentTime * pixelsPerSecond
+    
+    const viewportWidth = scrollContainer.offsetWidth
+    const scrollLeft = scrollContainer.scrollLeft
+    
+    const leftMargin = viewportWidth * 0.3
+    const rightMargin = viewportWidth * 0.7
+    
+    if (playheadX < scrollLeft + leftMargin) {
+      scrollContainer.scrollLeft = Math.max(0, playheadX - viewportWidth * 0.5)
+    } else if (playheadX > scrollLeft + rightMargin) {
+      scrollContainer.scrollLeft = playheadX - viewportWidth * 0.5
+    }
+  }, [currentTime, zoom, containerWidth, duration])
+
   return (
     <div className={className}>
       <div className="mb-4 flex gap-4 items-center flex-wrap">
@@ -236,11 +255,15 @@ export default function BeatmapEditor({
         </button>
       </div>
 
-      <div className="relative border-2 rounded-md overflow-x-auto bg-gray-900">
+      <div ref={scrollContainerRef} className="relative border-2 rounded-md overflow-x-auto bg-gray-900">
         <div
           ref={containerRef}
           className="relative overflow-hidden"
-          style={{ height: `${LANES * LANE_HEIGHT}px`, width: `${zoom}%`, minWidth: '100%' }}
+          style={{ 
+            height: `${LANES * LANE_HEIGHT}px`, 
+            width: `${zoom}%`,
+            minWidth: '100%' 
+          }}
         >
           {/* Beat Grid Lines */}
           {beatGridLines.map((line, index) => {

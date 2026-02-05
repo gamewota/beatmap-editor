@@ -29,6 +29,7 @@ function App() {
   const [notes, setNotes] = useState<Note[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const waveformContainerRef = useRef<HTMLDivElement>(null!)
 
   const handleLoadMusic = () => {
     fileInputRef.current?.click()
@@ -37,8 +38,6 @@ function App() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    // Stop any currently playing audio
     handleStop()
 
     setMusicTitle(file.name.replace(/\.[^/.]+$/, ''))
@@ -59,15 +58,14 @@ function App() {
 
     audio.addEventListener('ended', () => {
       setIsPlaying(false)
+      audio.currentTime = 0
       setCurrentTime(0)
     })
 
-    // Decode audio for waveform
     const audioContext = new AudioContext()
     const arrayBuffer = await file.arrayBuffer()
     const decoded = await audioContext.decodeAudioData(arrayBuffer)
     setAudioBuffer(decoded)
-    setDuration(decoded.duration)
   }
 
   const handlePlay = () => {
@@ -86,8 +84,8 @@ function App() {
     if (!audioRef.current) return
     audioRef.current.pause()
     audioRef.current.currentTime = 0
-    setCurrentTime(0)
     setIsPlaying(false)
+    setCurrentTime(0)
   }
 
   const handlePrevious = () => {
@@ -220,14 +218,15 @@ function App() {
         </div>
       </section>
       <section className='flex justify-center mt-4'>
-        <div className='w-full h-40 border-2 rounded-md overflow-x-auto'>
+        <div ref={waveformContainerRef} className='w-full h-40 border-2 rounded-md overflow-x-auto'>
           <Waveform 
             audioBuffer={audioBuffer} 
             currentTime={currentTime} 
             duration={duration}
             onSeek={handleSeek}
             zoom={zoom}
-            className='w-full h-20' 
+            className='w-full h-20'
+            containerRef={waveformContainerRef}
           />
         </div>
       </section>
