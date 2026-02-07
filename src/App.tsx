@@ -1,5 +1,5 @@
 import './App.css'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Button from './components/Button'
 import Title from './components/Title'
 import Icon from './components/Icon'
@@ -8,6 +8,7 @@ import Waveform from './components/Waveform'
 import BeatmapEditor from './components/BeatmapEditor'
 import type { Note } from './components/BeatmapEditor'
 import { detectBPM } from './utils/bpmDetection'
+import { TimelineViewport } from './utils/TimelineViewport'
 import volumeIcon from './assets/volume.png'
 import magnifier from './assets/zoom-in.png'
 import next from './assets/forward-button.png'
@@ -36,6 +37,20 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const waveformContainerRef = useRef<HTMLDivElement>(null!)
   const audioInitializedRef = useRef(false)
+
+  // Create unified timeline viewport - SINGLE SOURCE OF TRUTH
+  // Initialize with default values, will be updated in effects
+  const viewport = useMemo(() => new TimelineViewport(0, 800), [])
+
+  // Update viewport when duration changes
+  useEffect(() => {
+    viewport.setDuration(duration * 1000)
+  }, [duration, viewport])
+
+  // Update viewport when zoom changes
+  useEffect(() => {
+    viewport.setZoom(zoom / 100)
+  }, [zoom, viewport])
 
   const handleLoadMusic = () => {
     fileInputRef.current?.click()
@@ -130,7 +145,8 @@ function App() {
         audioRef.current = null
       }
     }
-  }, [audioUrl])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl])  // CRITICAL: volume NOT in deps - recreating audio on volume change causes playback to stop
 
   // Update volume without recreating audio element
   useEffect(() => {
@@ -141,12 +157,13 @@ function App() {
 
   // Cleanup audio URL only on final unmount
   useEffect(() => {
+    const currentAudioUrl = audioUrl
     return () => {
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
+      if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl)
       }
     }
-  }, [])
+  }, [audioUrl])
 
   const handlePlay = () => {
     if (!audioRef.current) return
@@ -418,9 +435,8 @@ function App() {
           <Waveform 
             audioBuffer={audioBuffer} 
             currentTime={currentTime} 
-            duration={duration}
+            viewport={viewport}
             onSeek={handleSeek}
-            zoom={zoom}
             className='w-full h-20'
             containerRef={waveformContainerRef}
           />
@@ -435,7 +451,7 @@ function App() {
           bpm={bpm}
           snapEnabled={snapEnabled}
           snapDivision={snapDivision}
-          zoom={zoom}
+          viewport={viewport}
           className="w-full"
         />
       </section>

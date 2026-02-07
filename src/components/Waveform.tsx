@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
+import type { TimelineViewport } from '../utils/TimelineViewport'
 
 interface WaveformProps {
   audioBuffer?: AudioBuffer | null
   currentTime?: number
-  duration?: number
+  viewport: TimelineViewport
   onSeek?: (time: number) => void
-  zoom?: number
   className?: string
   containerRef?: React.RefObject<HTMLDivElement>
+  onScroll?: (scrollLeft: number) => void
 }
 
-export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, onSeek, zoom = 100, className = '', containerRef }: WaveformProps) {
+export default function Waveform({ 
+  audioBuffer, 
+  currentTime = 0, 
+  viewport, 
+  onSeek, 
+  className = '', 
+  containerRef,
+  onScroll 
+}: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [, setViewportVersion] = useState(0) // Force re-render on viewport changes
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -21,24 +31,31 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    const state = viewport.getState()
+    const totalWidth = viewport.getTotalWidth()
+
+    // Safeguard: Don't render with invalid scale
+    if (!state.pixelsPerMs || state.pixelsPerMs <= 0 || !isFinite(state.pixelsPerMs)) {
+      console.warn('Waveform: Invalid pixelsPerMs, skipping render')
+      return
+    }
+
     // Set canvas size
     const dpr = window.devicePixelRatio || 1
-    const width = canvas.offsetWidth
     const height = canvas.offsetHeight
-    canvas.width = width * dpr
+    canvas.width = totalWidth * dpr
     canvas.height = height * dpr
     ctx.scale(dpr, dpr)
 
     // Clear canvas
     ctx.fillStyle = '#1a1a1a'
-    ctx.fillRect(0, 0, width, height)
+    ctx.fillRect(0, 0, totalWidth, height)
 
-    if (!audioBuffer || duration === 0) return
+    if (!audioBuffer || state.durationMs === 0) return
 
     // === TIME-BASED WAVEFORM RENDERING (Critical for sync) ===
-    // Must use the SAME time-to-pixel conversion as BeatmapEditor
-    // width already includes zoom from CSS, so pixelsPerSecond accounts for zoom
-    const pixelsPerSecond = width / duration
+    // Use viewport's pixelsPerMs for consistent timeline rendering
+    const pixelsPerMs = state.pixelsPerMs
     
     // Get audio data
     const rawData = audioBuffer.getChannelData(0)
@@ -46,8 +63,7 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
     const totalSamples = rawData.length
     
     // Calculate how many samples to skip for reasonable detail at current zoom
-    // More zoom = more detail visible
-    const pixelsPerSample = pixelsPerSecond / sampleRate
+    const pixelsPerSample = (pixelsPerMs * 1000) / sampleRate
     const samplesPerPixel = Math.max(1, Math.floor(1 / pixelsPerSample))
     
     // Draw waveform using TIME-BASED positioning (not viewport stretching)
@@ -58,10 +74,10 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
     
     let isFirst = true
     for (let sampleIndex = 0; sampleIndex < totalSamples; sampleIndex += samplesPerPixel) {
-      // Calculate time position of this sample
-      const timeInSeconds = sampleIndex / sampleRate
+      // Calculate time position of this sample in milliseconds
+      const timeMs = (sampleIndex / sampleRate) * 1000
       // Convert time to pixel position using SAME formula as BeatmapEditor
-      const x = timeInSeconds * pixelsPerSecond
+      const x = viewport.timeToPixel(timeMs)
       
       // Get amplitude value
       const amplitude = Math.abs(rawData[sampleIndex])
@@ -74,15 +90,15 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
         ctx.lineTo(x, y)
       }
       
-      // Stop drawing beyond visible canvas
-      if (x > width) break
+      // Stop drawing beyond total width
+      if (x > totalWidth) break
     }
     ctx.stroke()
 
     // Draw playhead marker
-    if (duration > 0) {
+    if (state.durationMs > 0) {
       // SAME time-to-pixel conversion as waveform and BeatmapEditor
-      const playheadX = currentTime * pixelsPerSecond
+      const playheadX = viewport.timeToPixel(currentTime * 1000)
       ctx.strokeStyle = '#ef4444'
       ctx.lineWidth = 2
       ctx.beginPath()
@@ -91,27 +107,38 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
       ctx.stroke()
     }
 
-  }, [audioBuffer, currentTime, duration, zoom])
+  }, [audioBuffer, currentTime, viewport])
+
+  // Subscribe to viewport changes and force React re-render
+  useEffect(() => {
+    const unsubscribe = viewport.subscribe(() => {
+      // Force re-render by updating state
+      // This ensures the main rendering effect runs again
+      setViewportVersion(v => v + 1)
+    })
+
+    return unsubscribe
+  }, [viewport])
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !onSeek || duration === 0) return
+    if (!canvasRef.current || !onSeek) return
     setIsDragging(true)
     const rect = canvasRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    // rect.width already includes zoom scaling from CSS
-    const pixelsPerSecond = rect.width / duration
-    const clickedTime = x / pixelsPerSecond
-    onSeek(clickedTime)
+    const x = e.clientX - rect.left + (containerRef?.current?.scrollLeft || 0)
+    // Convert pixel to time using viewport
+    const clickedTimeMs = viewport.pixelToTime(x)
+    onSeek(clickedTimeMs / 1000)
   }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !canvasRef.current || !onSeek || duration === 0) return
+    if (!isDragging || !canvasRef.current || !onSeek) return
     const rect = canvasRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    // rect.width already includes zoom scaling from CSS
-    const pixelsPerSecond = rect.width / duration
-    const clickedTime = Math.max(0, Math.min(duration, x / pixelsPerSecond))
-    onSeek(clickedTime)
+    const x = e.clientX - rect.left + (containerRef?.current?.scrollLeft || 0)
+    // Convert pixel to time using viewport
+    const clickedTimeMs = viewport.pixelToTime(x)
+    const state = viewport.getState()
+    const clampedTime = Math.max(0, Math.min(state.durationMs / 1000, clickedTimeMs / 1000))
+    onSeek(clampedTime)
   }
 
   const handleMouseUp = () => {
@@ -127,36 +154,42 @@ export default function Waveform({ audioBuffer, currentTime = 0, duration = 0, o
 
   // Auto-scroll to follow playhead
   useEffect(() => {
-    if (!containerRef?.current || !canvasRef.current || duration === 0) return
+    if (!containerRef?.current || !canvasRef.current) return
     
     const scrollContainer = containerRef.current
-    const canvas = canvasRef.current
-    const canvasWidth = canvas.offsetWidth
     
-    // canvasWidth already includes zoom from CSS width: ${zoom}%
-    const pixelsPerSecond = canvasWidth / duration
-    const playheadX = currentTime * pixelsPerSecond
+    // Use viewport auto-scroll
+    viewport.autoScrollToTime(currentTime * 1000, 0.3)
     
-    const containerWidth = scrollContainer.offsetWidth
-    const scrollLeft = scrollContainer.scrollLeft
-    
-    // Keep playhead between 30% and 70% of visible area
-    const leftMargin = containerWidth * 0.3
-    const rightMargin = containerWidth * 0.7
-    
-    if (playheadX < scrollLeft + leftMargin) {
-      scrollContainer.scrollLeft = Math.max(0, playheadX - containerWidth * 0.5)
-    } else if (playheadX > scrollLeft + rightMargin) {
-      scrollContainer.scrollLeft = playheadX - containerWidth * 0.5
+    // Sync container scroll with viewport
+    scrollContainer.scrollLeft = viewport.getScrollLeft()
+  }, [currentTime, viewport, containerRef])
+
+  // Handle scroll synchronization
+  useEffect(() => {
+    const scrollContainer = containerRef?.current
+    if (!scrollContainer) return
+
+    const handleScroll = () => {
+      // Update viewport scroll position
+      viewport.setScrollLeft(scrollContainer.scrollLeft)
+      
+      // Notify parent of scroll
+      if (onScroll) {
+        onScroll(scrollContainer.scrollLeft)
+      }
     }
-  }, [currentTime, zoom, duration, containerRef])
+
+    scrollContainer.addEventListener('scroll', handleScroll)
+    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+  }, [containerRef, viewport, onScroll])
 
   return (
     <canvas
       ref={canvasRef}
-      className={`${className} ${duration > 0 ? 'cursor-pointer' : ''}`}
+      className={`${className} ${viewport.getState().durationMs > 0 ? 'cursor-pointer' : ''}`}
       style={{ 
-        width: `${zoom}%`,
+        width: `${viewport.getTotalWidth()}px`,
         height: '100%', 
         minWidth: '100%' 
       }}

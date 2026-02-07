@@ -2,9 +2,12 @@
  * High-performance timeline renderer using dual-canvas approach
  * Static canvas: Beat grid, lane backgrounds (redraws only on zoom/data change)
  * Dynamic canvas: Playhead, ghost notes (redraws every frame)
+ * 
+ * Now uses TimelineViewport as single source of truth for zoom and scroll
  */
 
 import type { Note } from '../components/BeatmapEditor'
+import type { TimelineViewport } from './TimelineViewport'
 
 export interface TimelineScale {
   pixelsPerMs: number
@@ -18,8 +21,6 @@ export interface RenderConfig {
   lanes: number
   laneHeight: number
   bpm: number
-  duration: number
-  zoom: number
   snapEnabled?: boolean
   snapDivision?: number
 }
@@ -29,19 +30,21 @@ export class TimelineRenderer {
   private dynamicCanvas: HTMLCanvasElement
   private staticCtx: CanvasRenderingContext2D
   private dynamicCtx: CanvasRenderingContext2D
-  private scale: TimelineScale
   private config: RenderConfig
   private cachedWidth = 0
   private cachedHeight = 0
   private needsStaticRedraw = true
+  private viewport: TimelineViewport
 
   constructor(
     staticCanvas: HTMLCanvasElement,
     dynamicCanvas: HTMLCanvasElement,
+    viewport: TimelineViewport,
     config: RenderConfig
   ) {
     this.staticCanvas = staticCanvas
     this.dynamicCanvas = dynamicCanvas
+    this.viewport = viewport
     this.config = config
 
     const staticCtx = staticCanvas.getContext('2d', { alpha: false })
@@ -54,15 +57,12 @@ export class TimelineRenderer {
     this.staticCtx = staticCtx
     this.dynamicCtx = dynamicCtx
 
-    this.scale = {
-      pixelsPerMs: 0,
-      viewportStartMs: 0,
-      viewportEndMs: 0,
-      containerWidth: 0,
-      containerHeight: 0
-    }
-
-    this.updateScale()
+    // Subscribe to viewport changes and trigger re-render callback
+    this.viewport.subscribe(() => {
+      this.needsStaticRedraw = true
+      // Viewport changes require re-render (zoom, scroll, etc.)
+      // The subscriber (BeatmapEditor) will call renderStatic()
+    })
   }
 
   updateConfig(config: Partial<RenderConfig>) {
@@ -73,7 +73,6 @@ export class TimelineRenderer {
     if (changed) {
       this.config = { ...this.config, ...config }
       this.needsStaticRedraw = true
-      this.updateScale()
     }
   }
 
@@ -90,49 +89,38 @@ export class TimelineRenderer {
     this.dynamicCanvas.style.height = `${height}px`
 
     // Set actual size in memory (use device pixel ratio for crisp rendering)
+    // WARNING: Setting canvas.width/height clears the canvas and resets transforms
     const dpr = window.devicePixelRatio || 1
     this.staticCanvas.width = width * dpr
     this.staticCanvas.height = height * dpr
     this.dynamicCanvas.width = width * dpr
     this.dynamicCanvas.height = height * dpr
 
-    // Scale contexts
-    this.staticCtx.scale(dpr, dpr)
-    this.dynamicCtx.scale(dpr, dpr)
+    // CRITICAL: Reapply DPR scaling after canvas resize (transforms were reset)
+    // Get fresh context to ensure we have the latest state
+    const staticCtx = this.staticCanvas.getContext('2d', { alpha: false })
+    const dynamicCtx = this.dynamicCanvas.getContext('2d', { alpha: true })
+    
+    if (staticCtx && dynamicCtx) {
+      staticCtx.scale(dpr, dpr)
+      dynamicCtx.scale(dpr, dpr)
+    }
 
     this.needsStaticRedraw = true
-    this.updateScale()
   }
 
-  updateScale() {
-    // Canvas width already includes zoom (applied in BeatmapEditor)
-    // Do not apply zoom again here
-    const totalWidth = this.cachedWidth
-    const durationMs = this.config.duration * 1000
-
-    this.scale = {
-      pixelsPerMs: durationMs > 0 ? totalWidth / durationMs : 0,
-      viewportStartMs: 0,
-      viewportEndMs: durationMs,
-      containerWidth: totalWidth,
-      containerHeight: this.cachedHeight
-    }
-  }
-
-  updateViewport(scrollLeft: number, viewportWidth: number) {
-    const startMs = scrollLeft / this.scale.pixelsPerMs
-    const endMs = (scrollLeft + viewportWidth) / this.scale.pixelsPerMs
-
-    this.scale.viewportStartMs = startMs
-    this.scale.viewportEndMs = endMs
-  }
-
+  /**
+   * Convert time to pixel position using viewport
+   */
   timeToPixel(timeMs: number): number {
-    return timeMs * this.scale.pixelsPerMs
+    return this.viewport.timeToPixel(timeMs)
   }
 
+  /**
+   * Convert pixel to time using viewport
+   */
   pixelToTime(pixel: number): number {
-    return pixel / this.scale.pixelsPerMs
+    return this.viewport.pixelToTime(pixel)
   }
 
   // Calculate grid-aligned X position for snapped notes
@@ -158,15 +146,22 @@ export class TimelineRenderer {
     if (!this.needsStaticRedraw) return
 
     const ctx = this.staticCtx
-    const { containerWidth, containerHeight } = this.scale
-    const { lanes, laneHeight, bpm, duration } = this.config
+    const { lanes, laneHeight, bpm } = this.config
+    const state = this.viewport.getState()
+    const totalWidth = this.viewport.getTotalWidth()
+
+    // Safeguard: Don't render with invalid scale
+    if (!state.pixelsPerMs || state.pixelsPerMs <= 0 || !isFinite(state.pixelsPerMs)) {
+      console.warn('Invalid pixelsPerMs, skipping render')
+      return
+    }
 
     // Clear
     ctx.fillStyle = '#111827' // bg-gray-900
-    ctx.fillRect(0, 0, containerWidth, containerHeight)
+    ctx.fillRect(0, 0, totalWidth, this.cachedHeight)
 
     // Draw beat grid lines
-    this.drawBeatGrid(ctx, bpm, duration)
+    this.drawBeatGrid(ctx, bpm, state.durationMs / 1000)
 
     // Draw lane dividers
     ctx.strokeStyle = '#374151' // border-gray-700
@@ -175,7 +170,7 @@ export class TimelineRenderer {
       const y = i * laneHeight
       ctx.beginPath()
       ctx.moveTo(0, y)
-      ctx.lineTo(containerWidth, y)
+      ctx.lineTo(totalWidth, y)
       ctx.stroke()
     }
 
@@ -196,7 +191,6 @@ export class TimelineRenderer {
     if (bpm === 0 || duration === 0) return
 
     const beatDuration = 60 / bpm
-    const { containerHeight } = this.scale
 
     let currentTime = 0
     let beatCount = 0
@@ -210,7 +204,7 @@ export class TimelineRenderer {
 
       ctx.beginPath()
       ctx.moveTo(x, 0)
-      ctx.lineTo(x, containerHeight)
+      ctx.lineTo(x, this.cachedHeight)
       ctx.stroke()
 
       currentTime += beatDuration
@@ -220,7 +214,8 @@ export class TimelineRenderer {
 
   private drawNotes(ctx: CanvasRenderingContext2D, notes: Note[]) {
     const { laneHeight, snapEnabled } = this.config
-    const { viewportStartMs, viewportEndMs } = this.scale
+    const state = this.viewport.getState()
+    const viewportEndMs = this.viewport.getViewportEndMs()
 
     // Note visual sizes (reduced for better precision)
     const TAP_RADIUS = 10 // Reduced from 15
@@ -231,10 +226,14 @@ export class TimelineRenderer {
       const noteEndMs = note.duration ? (note.time + note.duration) * 1000 : noteTimeMs
 
       // Viewport culling
-      if (noteEndMs < viewportStartMs || noteTimeMs > viewportEndMs) return
+      if (noteEndMs < state.viewportStartMs || noteTimeMs > viewportEndMs) return
 
       // Use grid-aligned position when snap is enabled
-      const x = snapEnabled ? this.getGridAlignedX(noteTimeMs) : this.timeToPixel(noteTimeMs)
+      let x = snapEnabled ? this.getGridAlignedX(noteTimeMs) : this.timeToPixel(noteTimeMs)
+      
+      // Round to eliminate sub-pixel drift at high zoom
+      x = Math.round(x)
+      
       const y = note.lane * laneHeight
 
       if (note.type === 'tap') {
@@ -253,8 +252,16 @@ export class TimelineRenderer {
 
   renderDynamic(currentTimeMs: number, ghostNote: { lane: number; time: number; type: 'tap' | 'hold' } | null) {
     const ctx = this.dynamicCtx
-    const { containerWidth, containerHeight } = this.scale
+    const totalWidth = this.viewport.getTotalWidth()
     const { laneHeight, snapEnabled } = this.config
+    const state = this.viewport.getState()
+
+    // Safeguard: Don't render with invalid scale
+    if (!state.pixelsPerMs || state.pixelsPerMs <= 0 || !isFinite(state.pixelsPerMs)) {
+      // Clear canvas and skip rendering
+      ctx.clearRect(0, 0, totalWidth, this.cachedHeight)
+      return
+    }
 
     // Ghost note sizes (smaller than real notes for visual distinction)
     const GHOST_TAP_RADIUS = 8 // Smaller than real note (10)
@@ -262,21 +269,29 @@ export class TimelineRenderer {
     const GHOST_HOLD_WIDTH = 24 // Fixed width for visual preview
 
     // Clear
-    ctx.clearRect(0, 0, containerWidth, containerHeight)
+    ctx.clearRect(0, 0, totalWidth, this.cachedHeight)
 
     // Draw playhead
-    const playheadX = this.timeToPixel(currentTimeMs)
+    let playheadX = this.timeToPixel(currentTimeMs)
+    
+    // Round to eliminate sub-pixel drift
+    playheadX = Math.round(playheadX)
+    
     ctx.strokeStyle = '#ef4444' // bg-red-500
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.moveTo(playheadX, 0)
-    ctx.lineTo(playheadX, containerHeight)
+    ctx.lineTo(playheadX, this.cachedHeight)
     ctx.stroke()
 
     // Draw ghost note
     if (ghostNote) {
       // Use grid-aligned position when snap is enabled
-      const x = snapEnabled ? this.getGridAlignedX(ghostNote.time * 1000) : this.timeToPixel(ghostNote.time * 1000)
+      let x = snapEnabled ? this.getGridAlignedX(ghostNote.time * 1000) : this.timeToPixel(ghostNote.time * 1000)
+      
+      // Round to eliminate sub-pixel drift at high zoom
+      x = Math.round(x)
+      
       const y = ghostNote.lane * laneHeight
 
       if (ghostNote.type === 'tap') {
@@ -306,7 +321,7 @@ export class TimelineRenderer {
     this.needsStaticRedraw = true
   }
 
-  getScale(): TimelineScale {
-    return { ...this.scale }
+  getViewport(): TimelineViewport {
+    return this.viewport
   }
 }

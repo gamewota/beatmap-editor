@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { SfxManager } from '../utils/SfxManager'
 import { TimelineRenderer } from '../utils/TimelineRenderer'
+import type { TimelineViewport } from '../utils/TimelineViewport'
 
 export type NoteType = 'tap' | 'hold'
 
@@ -13,31 +14,33 @@ export interface Note {
 }
 
 interface BeatmapEditorProps {
-  duration: number
+  duration: number  // Kept for API compatibility, viewport manages actual duration
   currentTime: number
   notes: Note[]
   onNotesChange: (notes: Note[]) => void
   bpm?: number
   snapEnabled?: boolean
   snapDivision?: number
-  zoom?: number
+  viewport: TimelineViewport
   className?: string
   sfxEnabled?: boolean
   onSfxEnabledChange?: (enabled: boolean) => void
+  onScroll?: (scrollLeft: number) => void
 }
 
 export default function BeatmapEditor({ 
-  duration, 
+  // duration kept for API compatibility but not used - viewport manages it
   currentTime, 
   notes, 
   onNotesChange,
   bpm = 120,
   snapEnabled = true,
   snapDivision = 4,
-  zoom = 100,
+  viewport,
   className = '',
   sfxEnabled = true,
-  onSfxEnabledChange
+  onSfxEnabledChange,
+  onScroll
 }: BeatmapEditorProps) {
   const [selectedNoteType, setSelectedNoteType] = useState<NoteType>('tap')
   const [isPlacingHold, setIsPlacingHold] = useState(false)
@@ -60,8 +63,6 @@ export default function BeatmapEditor({
   const cursorYRef = useRef<number | null>(null)
   // Cache selected note type in ref to avoid restarting animation loop
   const selectedNoteTypeRef = useRef<NoteType>('tap')
-  // Cache bounding rect to avoid layout reads on every mousemove
-  const cachedRectRef = useRef<DOMRect | null>(null)
   // Reusable ghost note object to avoid allocations in frame loop
   const ghostNoteObjectRef = useRef<{ lane: number; time: number; type: NoteType }>({ lane: 0, time: 0, type: 'tap' })
 
@@ -84,12 +85,11 @@ export default function BeatmapEditor({
     rendererRef.current = new TimelineRenderer(
       staticCanvasRef.current,
       dynamicCanvasRef.current,
+      viewport,
       {
         lanes: LANES,
         laneHeight: LANE_HEIGHT,
         bpm,
-        duration,
-        zoom,
         snapEnabled,
         snapDivision
       }
@@ -109,12 +109,10 @@ export default function BeatmapEditor({
 
     rendererRef.current.updateConfig({
       bpm,
-      duration,
-      zoom,
       snapEnabled,
       snapDivision
     })
-  }, [bpm, duration, zoom, snapEnabled, snapDivision])
+  }, [bpm, snapEnabled, snapDivision])
 
   // Handle canvas resize
   useEffect(() => {
@@ -122,28 +120,40 @@ export default function BeatmapEditor({
       if (!scrollContainerRef.current || !rendererRef.current) return
 
       const container = scrollContainerRef.current
-      const width = container.offsetWidth * (zoom / 100)
+      const width = viewport.getTotalWidth()
       const height = LANES * LANE_HEIGHT
 
+      // Update viewport with container width
+      viewport.setViewportWidth(container.offsetWidth)
+
       rendererRef.current.updateCanvasSize(Math.max(width, container.offsetWidth), height)
-      
-      // Update cached rect when size changes
-      if (interactionLayerRef.current) {
-        cachedRectRef.current = interactionLayerRef.current.getBoundingClientRect()
-      }
     }
 
     updateSize()
+    
+    // Subscribe to viewport changes
+    const unsubscribe = viewport.subscribe(() => {
+      updateSize()
+      // CRITICAL: Force re-render after viewport changes (zoom, duration, etc.)
+      if (rendererRef.current) {
+        rendererRef.current.forceStaticRedraw()
+        rendererRef.current.renderStatic(notes)
+      }
+    })
+
     window.addEventListener('resize', updateSize)
-    return () => window.removeEventListener('resize', updateSize)
-  }, [zoom])
+    return () => {
+      window.removeEventListener('resize', updateSize)
+      unsubscribe()
+    }
+  }, [viewport, notes])
 
   // Render static content when data changes
   useEffect(() => {
     if (!rendererRef.current) return
     rendererRef.current.forceStaticRedraw()
     rendererRef.current.renderStatic(notes)
-  }, [notes, bpm, duration, zoom])
+  }, [notes, bpm])
 
   // Animation loop for dynamic content (playhead, ghost notes)
   // Runs at 60fps, reads from refs to avoid triggering React re-renders
@@ -163,6 +173,18 @@ export default function BeatmapEditor({
         if (laneIndex >= 0 && laneIndex < LANES) {
           // Convert pixel to time
           let hoverTime = rendererRef.current.pixelToTime(cursorXRef.current) / 1000
+          
+          // Development-only: Verify round-trip conversion is accurate
+          if (import.meta.env.DEV) {
+            const roundTripPixel = rendererRef.current.timeToPixel(hoverTime)
+            const error = Math.abs(roundTripPixel - cursorXRef.current)
+            if (error > 1.0) {
+              console.warn(
+                `Round-trip conversion error: ${error.toFixed(2)}px`,
+                `Input: ${cursorXRef.current}px, Time: ${hoverTime}s, Output: ${roundTripPixel}px`
+              )
+            }
+          }
           
           // Snap to grid
           if (snapEnabled) {
@@ -254,11 +276,15 @@ export default function BeatmapEditor({
   }, [snapEnabled, bpm, snapDivision])
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!interactionLayerRef.current) return
+    if (!scrollContainerRef.current) return
 
-    const rect = interactionLayerRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left + (scrollContainerRef.current?.scrollLeft || 0)
-    const y = e.clientY - rect.top
+    // Use container rect for consistent coordinate conversion
+    const containerRect = scrollContainerRef.current.getBoundingClientRect()
+    const scrollLeft = scrollContainerRef.current.scrollLeft
+    
+    // Convert to absolute timeline coordinates
+    const x = (e.clientX - containerRect.left) + scrollLeft
+    const y = e.clientY - containerRect.top
 
     const laneIndex = Math.floor(y / LANE_HEIGHT)
     if (laneIndex < 0 || laneIndex >= LANES) return
@@ -299,13 +325,17 @@ export default function BeatmapEditor({
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!scrollContainerRef.current) return
 
-    // Use cached rect to avoid forced layout reflow
-    const rect = cachedRectRef.current
-    if (!rect) return
+    // CRITICAL: Use scroll container's rect, not interaction layer's rect
+    // The interaction layer is inside the scrolled content, so its rect.left changes with scroll
+    // We need the container's position + scroll offset for absolute timeline coordinates
+    const containerRect = scrollContainerRef.current.getBoundingClientRect()
+    const scrollLeft = scrollContainerRef.current.scrollLeft
 
-    // Store raw cursor position ONLY - all conversion happens in frame loop
-    cursorXRef.current = e.clientX - rect.left + scrollContainerRef.current.scrollLeft
-    cursorYRef.current = e.clientY - rect.top
+    // Convert to absolute timeline pixel position
+    // clientX - containerRect.left = position within visible viewport
+    // + scrollLeft = absolute position in timeline
+    cursorXRef.current = (e.clientX - containerRect.left) + scrollLeft
+    cursorYRef.current = e.clientY - containerRect.top
   }, [])
 
   const handleCanvasMouseLeave = useCallback(() => {
@@ -316,11 +346,15 @@ export default function BeatmapEditor({
 
   // Handle note deletion (click on note) - returns true if a note was clicked
   const handleNoteClick = useCallback((e: React.MouseEvent<HTMLDivElement>): boolean => {
-    if (!interactionLayerRef.current) return false
+    if (!scrollContainerRef.current) return false
 
-    const rect = interactionLayerRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left + (scrollContainerRef.current?.scrollLeft || 0)
-    const y = e.clientY - rect.top
+    // Use container rect for consistent coordinate conversion
+    const containerRect = scrollContainerRef.current.getBoundingClientRect()
+    const scrollLeft = scrollContainerRef.current.scrollLeft
+    
+    // Convert to absolute timeline coordinates
+    const x = (e.clientX - containerRect.left) + scrollLeft
+    const y = e.clientY - containerRect.top
 
     const clickLane = Math.floor(y / LANE_HEIGHT)
 
@@ -365,23 +399,13 @@ export default function BeatmapEditor({
     if (!scrollContainerRef.current || !rendererRef.current) return
     
     const scrollContainer = scrollContainerRef.current
-    const playheadX = timeToPixel(currentTime)
     
-    const viewportWidth = scrollContainer.offsetWidth
-    const scrollLeft = scrollContainer.scrollLeft
+    // Use viewport auto-scroll
+    viewport.autoScrollToTime(currentTime * 1000, 0.3)
     
-    const leftMargin = viewportWidth * 0.3
-    const rightMargin = viewportWidth * 0.7
-    
-    if (playheadX < scrollLeft + leftMargin) {
-      scrollContainer.scrollLeft = Math.max(0, playheadX - viewportWidth * 0.5)
-    } else if (playheadX > scrollLeft + rightMargin) {
-      scrollContainer.scrollLeft = playheadX - viewportWidth * 0.5
-    }
-
-    // Update renderer viewport for culling
-    rendererRef.current.updateViewport(scrollContainer.scrollLeft, viewportWidth)
-  }, [currentTime, timeToPixel])
+    // Sync container scroll with viewport
+    scrollContainer.scrollLeft = viewport.getScrollLeft()
+  }, [currentTime, viewport])
 
   // Update viewport on manual scroll (critical for note visibility)
   useEffect(() => {
@@ -390,21 +414,22 @@ export default function BeatmapEditor({
 
     const handleScroll = () => {
       if (!rendererRef.current || !scrollContainerRef.current) return
-      const viewportWidth = scrollContainerRef.current.offsetWidth
-      const scrollLeft = scrollContainerRef.current.scrollLeft
-      rendererRef.current.updateViewport(scrollLeft, viewportWidth)
+      
+      // Update viewport scroll position
+      viewport.setScrollLeft(scrollContainerRef.current.scrollLeft)
+      
+      // Notify parent of scroll
+      if (onScroll) {
+        onScroll(scrollContainerRef.current.scrollLeft)
+      }
+      
       rendererRef.current.forceStaticRedraw()
       rendererRef.current.renderStatic(notes)
-      
-      // Update cached rect when scrolling (position changes)
-      if (interactionLayerRef.current) {
-        cachedRectRef.current = interactionLayerRef.current.getBoundingClientRect()
-      }
     }
 
     scrollContainer.addEventListener('scroll', handleScroll)
     return () => scrollContainer.removeEventListener('scroll', handleScroll)
-  }, [notes])
+  }, [notes, viewport, onScroll])
 
   return (
     <div className={className}>
@@ -456,7 +481,7 @@ export default function BeatmapEditor({
       </div>
 
       <div ref={scrollContainerRef} className="relative border-2 rounded-md overflow-x-auto bg-gray-900">
-        <div className="relative" style={{ width: `${zoom}%`, minWidth: '100%' }}>
+        <div className="relative" style={{ width: `${viewport.getTotalWidth()}px`, minWidth: '100%' }}>
           {/* Static Canvas Layer - Beat grid, lanes, notes */}
           <canvas
             ref={staticCanvasRef}
