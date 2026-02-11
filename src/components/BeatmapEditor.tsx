@@ -21,6 +21,7 @@ interface BeatmapEditorProps {
   bpm?: number
   snapEnabled?: boolean
   snapDivision?: number
+  offsetMs?: number
   viewport: TimelineViewport
   className?: string
   sfxEnabled?: boolean
@@ -36,6 +37,7 @@ export default function BeatmapEditor({
   bpm = 120,
   snapEnabled = true,
   snapDivision = 4,
+  offsetMs = 0,
   viewport,
   className = '',
   sfxEnabled = true,
@@ -94,7 +96,8 @@ export default function BeatmapEditor({
         laneHeight: LANE_HEIGHT,
         bpm,
         snapEnabled,
-        snapDivision
+        snapDivision,
+        offsetMs
       }
     )
 
@@ -113,9 +116,10 @@ export default function BeatmapEditor({
     rendererRef.current.updateConfig({
       bpm,
       snapEnabled,
-      snapDivision
+      snapDivision,
+      offsetMs
     })
-  }, [bpm, snapEnabled, snapDivision])
+  }, [bpm, snapEnabled, snapDivision, offsetMs])
 
   // Handle canvas resize
   useEffect(() => {
@@ -189,14 +193,17 @@ export default function BeatmapEditor({
             }
           }
           
-          // Snap to grid (ALWAYS enforce when snap is enabled)
+          // Snap to grid (ALWAYS enforce when snap is enabled, with offset)
           let snapHighlightTimeMs: number | null = null
           if (snapEnabled) {
             const beatDuration = 60 / bpm
             const snapInterval = beatDuration / snapDivision
-            hoverTime = Math.round(hoverTime / snapInterval) * snapInterval
+            // Apply offset: shift time by offset, snap, then add offset back
+            const hoverTimeMs = hoverTime * 1000
+            const snappedTimeMs = Math.round((hoverTimeMs - offsetMs) / (snapInterval * 1000)) * (snapInterval * 1000) + offsetMs
+            hoverTime = snappedTimeMs / 1000
             // Store snap highlight position for visual feedback
-            snapHighlightTimeMs = hoverTime * 1000
+            snapHighlightTimeMs = snappedTimeMs
           }
           
           // Reuse existing object to avoid allocations
@@ -238,7 +245,7 @@ export default function BeatmapEditor({
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [snapEnabled, bpm, snapDivision])
+  }, [snapEnabled, bpm, snapDivision, offsetMs])
 
   // Sync external currentTime to internal ref (no setState in render loop)
   useEffect(() => {

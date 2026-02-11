@@ -23,6 +23,7 @@ export interface RenderConfig {
   bpm: number
   snapEnabled?: boolean
   snapDivision?: number
+  offsetMs?: number
 }
 
 export class TimelineRenderer {
@@ -125,18 +126,19 @@ export class TimelineRenderer {
 
   // Calculate grid-aligned X position for snapped notes
   private getGridAlignedX(timeMs: number): number {
-    const { bpm, snapEnabled, snapDivision } = this.config
+    const { bpm, snapEnabled, snapDivision, offsetMs = 0 } = this.config
     
     if (!snapEnabled || !bpm || !snapDivision) {
       // No snapping - use exact time position
       return this.timeToPixel(timeMs)
     }
 
-    // Calculate which grid column this note belongs to
+    // Calculate which grid column this note belongs to (with offset)
     const beatDurationMs = (60 / bpm) * 1000
     const gridIntervalMs = beatDurationMs / snapDivision
-    const gridIndex = Math.round(timeMs / gridIntervalMs)
-    const gridColumnCenterMs = gridIndex * gridIntervalMs
+    // Apply offset: shift time by offset, snap, then add offset back
+    const gridIndex = Math.round((timeMs - offsetMs) / gridIntervalMs)
+    const gridColumnCenterMs = gridIndex * gridIntervalMs + offsetMs
     
     // Return pixel position of grid column center
     return this.timeToPixel(gridColumnCenterMs)
@@ -190,7 +192,7 @@ export class TimelineRenderer {
   private drawBeatGrid(ctx: CanvasRenderingContext2D, bpm: number, duration: number) {
     if (bpm === 0 || duration === 0) return
 
-    const { snapEnabled, snapDivision } = this.config
+    const { snapEnabled, snapDivision, offsetMs = 0 } = this.config
     const beatDurationMs = (60 / bpm) * 1000
     const durationMs = duration * 1000
     
@@ -199,15 +201,17 @@ export class TimelineRenderer {
     // Level 2: Draw common subdivision (1/4) for context
     // Level 3: Draw snap grid if different from above
     
-    // Helper to draw a grid level
+    // Helper to draw a grid level (with offset support)
     const drawGridLevel = (intervalMs: number, style: { color: string; width: number; opacity: number }) => {
-      let currentTimeMs = 0
+      // Start from offset, then iterate
+      let currentTimeMs = offsetMs
       while (currentTimeMs <= durationMs) {
         const x = Math.round(this.timeToPixel(currentTimeMs))
         
-        // Check if this is a measure line (every 4 beats)
-        const beatIndex = Math.round(currentTimeMs / beatDurationMs)
-        const isMeasure = beatIndex % 4 === 0 && Math.abs(currentTimeMs - beatIndex * beatDurationMs) < 1
+        // Check if this is a measure line (every 4 beats from offset)
+        const beatIndexFromOffset = Math.round((currentTimeMs - offsetMs) / beatDurationMs)
+        const isMeasure = beatIndexFromOffset % 4 === 0 && 
+          Math.abs(currentTimeMs - offsetMs - beatIndexFromOffset * beatDurationMs) < 1
         
         if (isMeasure) {
           // Measure lines are always strongest

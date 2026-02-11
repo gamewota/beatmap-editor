@@ -29,6 +29,7 @@ function App() {
   const [bpmSuggested, setBpmSuggested] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [snapDivision, setSnapDivision] = useState<number>(4)
+  const [offsetMs, setOffsetMs] = useState(0)
   const [zoom, setZoom] = useState(100)
   const [notes, setNotes] = useState<Note[]>([])
   const [difficulty, setDifficulty] = useState<string>('easy')
@@ -366,7 +367,7 @@ function App() {
       </section>
       <section className='flex items-center justify-around'>
         <div className='border-2 w-[30%] h-12.5 mt-4 flex rounded-md'>
-          <div className='border-r w-[50%] h-full p-2 flex flex-col justify-center items-center'>
+          <div className='border-r w-[40%] h-full p-2 flex flex-col justify-center items-center'>
             <label className='text-xs text-gray-600 mb-1'>
               BPM {bpmSuggested && <span className='text-green-600'>(Suggested)</span>}
             </label>
@@ -380,6 +381,17 @@ function App() {
                 setBpmSuggested(false)
               }}
               className="w-16 px-1 text-center border rounded"
+            />
+          </div>
+          <div className='border-r w-[30%] h-full p-2 flex flex-col justify-center items-center'>
+            <label className='text-xs text-gray-600 mb-1'>Offset (ms)</label>
+            <input
+              type="number"
+              step="10"
+              value={offsetMs}
+              onChange={(e) => setOffsetMs(Number(e.target.value))}
+              className="w-16 px-1 text-center border rounded"
+              title="Grid offset in milliseconds - shifts the BPM grid, not the audio"
             />
           </div>
           <div className='border-l w-[50%] h-full p-2 flex flex-col justify-center items-center gap-1'>
@@ -402,10 +414,6 @@ function App() {
                 <option value={2}>1/2 (Half)</option>
                 <option value={4}>1/4 (Quarter)</option>
                 <option value={8}>1/8 (Eighth)</option>
-                <option value={12}>1/12 (Triplet)</option>
-                <option value={16}>1/16 (16th)</option>
-                <option value={24}>1/24 (Triplet 16th)</option>
-                <option value={32}>1/32 (32nd)</option>
               </select>
             </div>
           </div>
@@ -432,7 +440,7 @@ function App() {
           </div>
           <div className='flex items-center gap-4 ml-2'>
             <Icon url={magnifier}/>
-            <Slider value={zoom} min={25} max={500} onChange={setZoom} className="range" />
+            <Slider value={zoom} min={25} max={100} onChange={setZoom} className="range" />
             <span className='text-xs text-gray-600 min-w-12'>{zoom}%</span>
           </div>
         </div>
@@ -458,6 +466,7 @@ function App() {
           bpm={bpm}
           snapEnabled={snapEnabled}
           snapDivision={snapDivision}
+          offsetMs={offsetMs}
           viewport={viewport}
           className="w-full"
         />
