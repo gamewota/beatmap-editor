@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beatmap Editor - Microfrontend Demo</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: #1a1a2e;
+      color: white;
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .controls {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .editor-container {
+      background: #0f3460;
+      padding: 20px;
+      border-radius: 8px;
+      min-height: 500px;
+    }
+    beatmap-editor {
+      display: block;
+      width: 100%;
+      min-height: 400px;
+      border: 2px solid #e94560;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="text-3xl font-bold mb-4">🎵 Beatmap Editor Microfrontend</h1>
+    
+    <div class="controls">
+      <h2 class="text-xl mb-2">Controls</h2>
+      <div class="flex gap-4 flex-wrap">
+        <label class="flex items-center gap-2">
+          BPM:
+          <input type="number" id="bpm" value="120" min="60" max="200" 
+                 class="bg-gray-700 px-2 py-1 rounded text-white w-20"
+                 onchange="updateEditor()">
+        </label>
+        <label class="flex items-center gap-2">
+          Offset (ms):
+          <input type="number" id="offset" value="0" step="10"
+                 class="bg-gray-700 px-2 py-1 rounded text-white w-20"
+                 onchange="updateEditor()">
+        </label>
+        <label class="flex items-center gap-2">
+          Snap:
+          <select id="snap" class="bg-gray-700 px-2 py-1 rounded text-white"
+                  onchange="updateEditor()">
+            <option value="1">1/1</option>
+            <option value="2">1/2</option>
+            <option value="4" selected>1/4</option>
+            <option value="8">1/8</option>
+            <option value="16">1/16</option>
+          </select>
+        </label>
+        <button onclick="exportMap()" 
+                class="bg-blue-600 hover:bg-blue-700 px-4 py-1 rounded">
+          Export
+        </button>
+      </div>
+      <div id="output" class="mt-4 p-2 bg-gray-800 rounded font-mono text-sm hidden"></div>
+    </div>
+
+    <div class="editor-container">
+      <beatmap-editor id="editor"
+        bpm="120"
+        snap-enabled="true"
+        snap-division="4"
+        offset-ms="0"
+        zoom="100">
+      </beatmap-editor>
+    </div>
+
+    <div class="mt-4 text-gray-400 text-sm">
+      <p><strong>Usage:</strong></p>
+      <ul class="list-disc ml-5 mt-1">
+        <li>Left click to place notes</li>
+        <li>Right click on note to delete</li>
+        <li>Adjust BPM/Offset to match your music</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Load the beatmap editor web component -->
+  <script type="module">
+    // The web component is auto-registered when imported
+    // In production, load from: https://yourusername.github.io/beatmap-editor/beatmap-editor.es.js
+    import('/beatmap-editor.es.js').catch(() => {
+      console.log('Loading from local path...');
+    });
+  </script>
+
+  <script>
+    function updateEditor() {
+      const editor = document.getElementById('editor');
+      editor.setAttribute('bpm', document.getElementById('bpm').value);
+      editor.setAttribute('offset-ms', document.getElementById('offset').value);
+      editor.setAttribute('snap-division', document.getElementById('snap').value);
+    }
+
+    function exportMap() {
+      const editor = document.getElementById('editor');
+      const notes = editor.exportBeatmap();
+      const output = document.getElementById('output');
+      output.textContent = JSON.stringify(JSON.parse(notes), null, 2);
+      output.classList.remove('hidden');
+    }
+
+    // Listen for note changes
+    document.addEventListener('noteschange', (e) => {
+      console.log('Notes changed:', e.detail.notes);
+    });
+  </script>
+</body>
+</html>
