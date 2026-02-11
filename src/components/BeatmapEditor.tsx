@@ -360,9 +360,11 @@ export default function BeatmapEditor({
     cursorYRef.current = null
   }, [])
 
-  // Handle note deletion (click on note) - returns true if a note was clicked
-  const handleNoteClick = useCallback((e: React.MouseEvent<HTMLDivElement>): boolean => {
-    if (!scrollContainerRef.current) return false
+  // Handle note deletion on RIGHT CLICK
+  const handleRightClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault() // Prevent browser context menu
+    
+    if (!scrollContainerRef.current) return
 
     // Use container rect for consistent coordinate conversion
     const containerRect = scrollContainerRef.current.getBoundingClientRect()
@@ -397,10 +399,7 @@ export default function BeatmapEditor({
 
     if (clickedNote) {
       onNotesChange(notes.filter(n => n.id !== clickedNote.id))
-      return true
     }
-
-    return false
   }, [notes, onNotesChange, timeToPixel])
 
   const handleClearAll = () => {
@@ -520,13 +519,8 @@ export default function BeatmapEditor({
               height: `${LANES * LANE_HEIGHT}px`,
               width: '100%'
             }}
-            onClick={(e) => {
-              // Try to delete note first; only place new note if no note was clicked
-              const noteWasClicked = handleNoteClick(e)
-              if (!noteWasClicked) {
-                handleCanvasClick()
-              }
-            }}
+            onClick={handleCanvasClick}
+            onContextMenu={handleRightClick}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}
           />
