@@ -30,6 +30,7 @@ function App() {
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [snapDivision, setSnapDivision] = useState<number>(4)
   const [offsetMs, setOffsetMs] = useState(0)
+  const [offsetSuggested, setOffsetSuggested] = useState(false)
   const [zoom, setZoom] = useState(100)
   const [notes, setNotes] = useState<Note[]>([])
   const [difficulty, setDifficulty] = useState<string>('easy')
@@ -78,12 +79,17 @@ function App() {
     const decoded = await audioContext.decodeAudioData(arrayBuffer)
     setAudioBuffer(decoded)
     
-    // Auto-detect BPM (non-blocking suggestion)
-    setTimeout(() => {
-      const detectedBpm = detectBPM(decoded)
-      setBpm(detectedBpm)
+    // Auto-detect BPM and offset (non-blocking suggestion)
+    detectBPM(decoded).then(result => {
+      setBpm(result.bpm)
       setBpmSuggested(true)
-    }, 0)
+      setOffsetMs(result.offsetMs)
+      setOffsetSuggested(true)
+    }).catch(() => {
+      // Keep defaults if detection fails
+      setBpmSuggested(false)
+      setOffsetSuggested(false)
+    })
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,9 +372,9 @@ function App() {
         </div>
       </section>
       <section className='flex items-center justify-around'>
-        <div className='border-2 w-[30%] h-12.5 mt-4 flex rounded-md'>
-          <div className='border-r w-[40%] h-full p-2 flex flex-col justify-center items-center'>
-            <label className='text-xs text-gray-600 mb-1'>
+        <div className='border-2 w-[30%] h-18 mt-4 flex rounded-md'>
+          <div className='border-r w-[30%] h-full p-2 flex flex-col justify-center items-center'>
+            <label className='text-xs text-gray-600 mb-1 text-center'>
               BPM {bpmSuggested && <span className='text-green-600'>(Suggested)</span>}
             </label>
             <input
@@ -384,17 +390,22 @@ function App() {
             />
           </div>
           <div className='border-r w-[30%] h-full p-2 flex flex-col justify-center items-center'>
-            <label className='text-xs text-gray-600 mb-1'>Offset (ms)</label>
+            <label className='text-xs text-gray-600 mb-1 text-center'>
+              Offset (ms) {offsetSuggested && <span className='text-green-600'>(Suggested)</span>}
+            </label>
             <input
               type="number"
               step="10"
               value={offsetMs}
-              onChange={(e) => setOffsetMs(Number(e.target.value))}
+              onChange={(e) => {
+                setOffsetMs(Number(e.target.value))
+                setOffsetSuggested(false)
+              }}
               className="w-16 px-1 text-center border rounded"
               title="Grid offset in milliseconds - shifts the BPM grid, not the audio"
             />
           </div>
-          <div className='border-l w-[50%] h-full p-2 flex flex-col justify-center items-center gap-1'>
+          <div className='border-l w-[40%] h-full p-2 flex flex-col justify-center items-center gap-1'>
             <label className='text-xs text-gray-600'>Snap</label>
             <div className='flex gap-1 items-center'>
               <button
@@ -418,7 +429,7 @@ function App() {
             </div>
           </div>
         </div>
-        <div className='border-2 w-[35%] h-12.5 mt-4 flex rounded-md'>
+        <div className='border-2 w-[35%] h-18 mt-4 flex rounded-md'>
           <div className='flex items-center justify-center w-[40%] border-r-2'>
             <p>{formatTime(currentTime)}</p>
           </div>
@@ -433,7 +444,7 @@ function App() {
             <Icon url={next} className='cursor-pointer' onClick={handleNext}/>
           </div>
         </div>
-        <div className='w-[30%] h-12.5 mt-4 flex rounded-md items-center'>
+        <div className='w-[30%] h-14 mt-4 flex rounded-md items-center'>
           <div className='flex items-center gap-4 ml-2'>
             <Icon url={volumeIcon}/>
             <Slider value={volume} min={0} max={100} onChange={handleVolumeChange} className="range" />
