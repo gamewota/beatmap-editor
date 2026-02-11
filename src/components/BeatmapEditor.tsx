@@ -65,6 +65,9 @@ export default function BeatmapEditor({
   const selectedNoteTypeRef = useRef<NoteType>('tap')
   // Reusable ghost note object to avoid allocations in frame loop
   const ghostNoteObjectRef = useRef<{ lane: number; time: number; type: NoteType }>({ lane: 0, time: 0, type: 'tap' })
+  // Store current ghost time (after snap) as single source of truth for placement
+  const currentGhostTimeRef = useRef<number | null>(null)
+  const currentGhostLaneRef = useRef<number | null>(null)
 
   // Track which SFX state to use
   const effectiveSfxEnabled = onSfxEnabledChange ? sfxEnabled : internalSfxEnabled
@@ -186,11 +189,14 @@ export default function BeatmapEditor({
             }
           }
           
-          // Snap to grid
+          // Snap to grid (ALWAYS enforce when snap is enabled)
+          let snapHighlightTimeMs: number | null = null
           if (snapEnabled) {
             const beatDuration = 60 / bpm
             const snapInterval = beatDuration / snapDivision
             hoverTime = Math.round(hoverTime / snapInterval) * snapInterval
+            // Store snap highlight position for visual feedback
+            snapHighlightTimeMs = hoverTime * 1000
           }
           
           // Reuse existing object to avoid allocations
@@ -199,10 +205,29 @@ export default function BeatmapEditor({
           reusableGhost.time = hoverTime
           reusableGhost.type = selectedNoteTypeRef.current
           ghostNote = reusableGhost
+          
+          // Store ghost time as single source of truth for click placement
+          currentGhostTimeRef.current = hoverTime
+          currentGhostLaneRef.current = laneIndex
+          
+          // Render with snap highlight
+          rendererRef.current.renderDynamic(
+            currentTimeInternalRef.current * 1000, 
+            ghostNote,
+            snapHighlightTimeMs
+          )
+        } else {
+          // No ghost note, but still render playhead
+          currentGhostTimeRef.current = null
+          currentGhostLaneRef.current = null
+          rendererRef.current.renderDynamic(currentTimeInternalRef.current * 1000, null, null)
         }
+      } else {
+        // No cursor, render playhead only
+        currentGhostTimeRef.current = null
+        currentGhostLaneRef.current = null
+        rendererRef.current.renderDynamic(currentTimeInternalRef.current * 1000, null, null)
       }
-
-      rendererRef.current.renderDynamic(currentTimeInternalRef.current * 1000, ghostNote)
       animationFrameRef.current = requestAnimationFrame(animate)
     }
 
@@ -256,41 +281,20 @@ export default function BeatmapEditor({
     lastTimeRef.current = currentTime
   }, [currentTime, notes, effectiveSfxEnabled])
 
-  // Convert pixel to time using renderer's scale
-  const pixelToTime = useCallback((pixel: number): number => {
-    if (!rendererRef.current) return 0
-    return rendererRef.current.pixelToTime(pixel) / 1000
-  }, [])
-
-  // Convert time to pixel using renderer's scale
+  // Convert time to pixel using renderer's scale (used for note deletion detection)
   const timeToPixel = useCallback((time: number): number => {
     if (!rendererRef.current) return 0
     return rendererRef.current.timeToPixel(time * 1000)
   }, [])
 
-  const snapToGrid = useCallback((time: number): number => {
-    if (!snapEnabled) return time
-    const beatDuration = 60 / bpm
-    const snapInterval = beatDuration / snapDivision
-    return Math.round(time / snapInterval) * snapInterval
-  }, [snapEnabled, bpm, snapDivision])
-
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!scrollContainerRef.current) return
-
-    // Use container rect for consistent coordinate conversion
-    const containerRect = scrollContainerRef.current.getBoundingClientRect()
-    const scrollLeft = scrollContainerRef.current.scrollLeft
+  const handleCanvasClick = useCallback(() => {
+    // CRITICAL: Reuse ghost time instead of recalculating
+    // Ghost time is already cursor→pixel→time→snap calculated in animation loop
+    const clickTime = currentGhostTimeRef.current
+    const laneIndex = currentGhostLaneRef.current
     
-    // Convert to absolute timeline coordinates
-    const x = (e.clientX - containerRect.left) + scrollLeft
-    const y = e.clientY - containerRect.top
-
-    const laneIndex = Math.floor(y / LANE_HEIGHT)
+    if (clickTime === null || laneIndex === null) return
     if (laneIndex < 0 || laneIndex >= LANES) return
-
-    let clickTime = pixelToTime(x)
-    clickTime = snapToGrid(clickTime)
 
     if (selectedNoteType === 'tap') {
       const newNote: Note = {
@@ -320,7 +324,7 @@ export default function BeatmapEditor({
         setIsPlacingHold(false)
       }
     }
-  }, [selectedNoteType, isPlacingHold, holdStartLane, holdStartTime, notes, onNotesChange, pixelToTime, snapToGrid])
+  }, [selectedNoteType, isPlacingHold, holdStartLane, holdStartTime, notes, onNotesChange])
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!scrollContainerRef.current) return
@@ -508,7 +512,7 @@ export default function BeatmapEditor({
               // Try to delete note first; only place new note if no note was clicked
               const noteWasClicked = handleNoteClick(e)
               if (!noteWasClicked) {
-                handleCanvasClick(e)
+                handleCanvasClick()
               }
             }}
             onMouseMove={handleCanvasMouseMove}

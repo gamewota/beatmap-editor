@@ -190,25 +190,73 @@ export class TimelineRenderer {
   private drawBeatGrid(ctx: CanvasRenderingContext2D, bpm: number, duration: number) {
     if (bpm === 0 || duration === 0) return
 
-    const beatDuration = 60 / bpm
+    const { snapEnabled, snapDivision } = this.config
+    const beatDurationMs = (60 / bpm) * 1000
+    const durationMs = duration * 1000
+    
+    // CRITICAL: Multi-level grid for musical clarity
+    // Level 1: Always draw beat grid (1/1) - PRIMARY MUSICAL STRUCTURE
+    // Level 2: Draw common subdivision (1/4) for context
+    // Level 3: Draw snap grid if different from above
+    
+    // Helper to draw a grid level
+    const drawGridLevel = (intervalMs: number, style: { color: string; width: number; opacity: number }) => {
+      let currentTimeMs = 0
+      while (currentTimeMs <= durationMs) {
+        const x = Math.round(this.timeToPixel(currentTimeMs))
+        
+        // Check if this is a measure line (every 4 beats)
+        const beatIndex = Math.round(currentTimeMs / beatDurationMs)
+        const isMeasure = beatIndex % 4 === 0 && Math.abs(currentTimeMs - beatIndex * beatDurationMs) < 1
+        
+        if (isMeasure) {
+          // Measure lines are always strongest
+          ctx.strokeStyle = `rgba(255, 255, 255, 0.4)`
+          ctx.lineWidth = 2.5
+        } else {
+          ctx.strokeStyle = style.color
+          ctx.lineWidth = style.width
+        }
 
-    let currentTime = 0
-    let beatCount = 0
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, this.cachedHeight)
+        ctx.stroke()
 
-    while (currentTime <= duration) {
-      const x = this.timeToPixel(currentTime * 1000)
-      const isMeasure = beatCount % 4 === 0
-
-      ctx.strokeStyle = isMeasure ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.1)'
-      ctx.lineWidth = isMeasure ? 2 : 1
-
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, this.cachedHeight)
-      ctx.stroke()
-
-      currentTime += beatDuration
-      beatCount++
+        currentTimeMs += intervalMs
+      }
+    }
+    
+    // Level 1: ALWAYS render beat grid (1/1) - NON-NEGOTIABLE
+    drawGridLevel(beatDurationMs, {
+      color: 'rgba(255, 255, 255, 0.25)', // Bright - primary structure
+      width: 2,
+      opacity: 0.25
+    })
+    
+    // Level 2: Render 1/4 subdivision for musical context (if not already beat grid)
+    if (snapDivision && snapDivision > 1) {
+      const quarterNoteMs = beatDurationMs / 4
+      if (quarterNoteMs !== beatDurationMs) {
+        drawGridLevel(quarterNoteMs, {
+          color: 'rgba(255, 255, 255, 0.12)', // Medium - subdivision context
+          width: 1,
+          opacity: 0.12
+        })
+      }
+    }
+    
+    // Level 3: Render actual snap grid (if different from beat and 1/4)
+    if (snapEnabled && snapDivision && snapDivision > 4) {
+      const snapIntervalMs = beatDurationMs / snapDivision
+      // Only draw if not already covered by beat or 1/4 grid
+      if (snapIntervalMs !== beatDurationMs && snapIntervalMs !== beatDurationMs / 4) {
+        drawGridLevel(snapIntervalMs, {
+          color: 'rgba(255, 255, 255, 0.06)', // Subtle - precision guides
+          width: 0.5,
+          opacity: 0.06
+        })
+      }
     }
   }
 
@@ -250,7 +298,11 @@ export class TimelineRenderer {
     })
   }
 
-  renderDynamic(currentTimeMs: number, ghostNote: { lane: number; time: number; type: 'tap' | 'hold' } | null) {
+  renderDynamic(
+    currentTimeMs: number, 
+    ghostNote: { lane: number; time: number; type: 'tap' | 'hold' } | null,
+    snapHighlightTimeMs: number | null = null
+  ) {
     const ctx = this.dynamicCtx
     const totalWidth = this.viewport.getTotalWidth()
     const { laneHeight, snapEnabled } = this.config
@@ -270,6 +322,24 @@ export class TimelineRenderer {
 
     // Clear
     ctx.clearRect(0, 0, totalWidth, this.cachedHeight)
+
+    // Draw snap target highlight (when snap is enabled and cursor is hovering)
+    if (snapEnabled && snapHighlightTimeMs !== null) {
+      const highlightX = Math.round(this.getGridAlignedX(snapHighlightTimeMs))
+      
+      // Draw highlighted column background
+      ctx.fillStyle = 'rgba(96, 165, 250, 0.1)' // Very subtle blue highlight
+      const columnWidth = 8 // Subtle width for highlight
+      ctx.fillRect(highlightX - columnWidth / 2, 0, columnWidth, this.cachedHeight)
+      
+      // Draw highlighted snap line (stronger than normal grid)
+      ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)' // Brighter blue
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(highlightX, 0)
+      ctx.lineTo(highlightX, this.cachedHeight)
+      ctx.stroke()
+    }
 
     // Draw playhead
     let playheadX = this.timeToPixel(currentTimeMs)

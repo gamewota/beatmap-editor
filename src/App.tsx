@@ -365,7 +365,7 @@ function App() {
         </div>
       </section>
       <section className='flex items-center justify-around'>
-        <div className='border-2 w-[20%] h-12.5 mt-4 flex rounded-md'>
+        <div className='border-2 w-[30%] h-12.5 mt-4 flex rounded-md'>
           <div className='border-r w-[50%] h-full p-2 flex flex-col justify-center items-center'>
             <label className='text-xs text-gray-600 mb-1'>
               BPM {bpmSuggested && <span className='text-green-600'>(Suggested)</span>}
@@ -396,14 +396,21 @@ function App() {
                 onChange={(e) => setSnapDivision(Number(e.target.value))}
                 disabled={!snapEnabled}
                 className="px-1 py-1 text-xs border rounded disabled:opacity-50"
+                title={snapEnabled ? "Beat lines (thick) always visible • Snap lines (thin) for precision" : "Turn on snap to quantize notes"}
               >
-                <option value={2}>1/2</option>
-                <option value={4}>1/4</option>
+                <option value={1}>1/1 (Whole)</option>
+                <option value={2}>1/2 (Half)</option>
+                <option value={4}>1/4 (Quarter)</option>
+                <option value={8}>1/8 (Eighth)</option>
+                <option value={12}>1/12 (Triplet)</option>
+                <option value={16}>1/16 (16th)</option>
+                <option value={24}>1/24 (Triplet 16th)</option>
+                <option value={32}>1/32 (32nd)</option>
               </select>
             </div>
           </div>
         </div>
-        <div className='border-2 w-[45%] h-12.5 mt-4 flex rounded-md'>
+        <div className='border-2 w-[35%] h-12.5 mt-4 flex rounded-md'>
           <div className='flex items-center justify-center w-[40%] border-r-2'>
             <p>{formatTime(currentTime)}</p>
           </div>

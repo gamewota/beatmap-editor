@@ -7,6 +7,11 @@
  * Core Principle: There is ONE timeline. Everything else is just a different way of looking at it.
  */
 
+// CRITICAL: Zoom calibration factor
+// At 100% zoom (zoom = 1.0), the timeline should feel like the old ~500% zoom
+// This makes 100% zoom immediately usable for mapping
+const ZOOM_CALIBRATION_FACTOR = 5
+
 export interface TimelineViewportState {
   zoom: number              // Zoom level (1.0 = 100%, 2.0 = 200%, etc)
   pixelsPerMs: number       // Derived from zoom and duration
@@ -55,9 +60,12 @@ export class TimelineViewport {
     }
 
     // Base width is the viewport width
-    // Total timeline width = viewportWidth * zoom
+    // Total timeline width = viewportWidth * zoom * calibration
     // pixelsPerMs = totalWidth / durationMs
-    const totalTimelineWidth = this.state.viewportWidthPx * this.state.zoom
+    // 
+    // CRITICAL: ZOOM_CALIBRATION_FACTOR makes 100% zoom feel like ~500% of the old scale
+    // This ensures the editor is immediately usable at default zoom
+    const totalTimelineWidth = this.state.viewportWidthPx * this.state.zoom * ZOOM_CALIBRATION_FACTOR
     this.state.pixelsPerMs = totalTimelineWidth / this.state.durationMs
   }
 
@@ -66,7 +74,9 @@ export class TimelineViewport {
    */
   setZoom(zoom: number) {
     // Clamp zoom to reasonable range
-    zoom = Math.max(1.0, Math.min(20.0, zoom))
+    // With ZOOM_CALIBRATION_FACTOR=5, this gives effective range of 0.25x to 20x
+    // (old equivalent: 25% to 2000% without calibration)
+    zoom = Math.max(0.2, Math.min(4.0, zoom))
     
     if (this.state.zoom === zoom) return
 
