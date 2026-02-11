@@ -119,7 +119,12 @@ export default function BeatmapEditor({
       snapDivision,
       offsetMs
     })
-  }, [bpm, snapEnabled, snapDivision, offsetMs])
+    
+    // CRITICAL: Force static redraw when offset or BPM changes
+    // because these affect the grid position
+    rendererRef.current.forceStaticRedraw()
+    rendererRef.current.renderStatic(notes)
+  }, [bpm, snapEnabled, snapDivision, offsetMs, notes])
 
   // Handle canvas resize
   useEffect(() => {
