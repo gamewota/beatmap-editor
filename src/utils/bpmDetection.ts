@@ -21,8 +21,8 @@ export async function detectBPM(audioBuffer: AudioBuffer): Promise<BPMDetectionR
     // It returns an object with bpm and offset (in seconds)
     const result = await guess(audioBuffer);
     
-    // Normalize BPM to reasonable range
-    const normalizedBpm = normalizeBPM(result.bpm);
+    // Normalize BPM to reasonable range and round to integer
+    const normalizedBpm = Math.round(normalizeBPM(result.bpm));
     
     // Convert offset from seconds to milliseconds
     const offsetMs = Math.round(result.offset * 1000);
