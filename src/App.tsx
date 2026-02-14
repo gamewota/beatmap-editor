@@ -40,6 +40,7 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const waveformContainerRef = useRef<HTMLDivElement>(null!)
   const audioInitializedRef = useRef(false)
+  const bpmDetectionGenRef = useRef(0) // Generation counter for BPM detection cancellation
 
   // Create unified timeline viewport - SINGLE SOURCE OF TRUTH
   // Initialize with default values, will be updated in effects
@@ -94,12 +95,22 @@ function App() {
     
     // Auto-detect BPM and offset (non-blocking suggestion)
     if (!decoded) return
+    
+    // Increment generation counter to invalidate previous detections
+    const currentGen = ++bpmDetectionGenRef.current
+    
     detectBPM(decoded).then(result => {
+      // Only apply if this is still the latest detection (not stale)
+      if (currentGen !== bpmDetectionGenRef.current) return
+      
       setBpm(result.bpm)
       setBpmSuggested(true)
       setOffsetMs(result.offsetMs)
       setOffsetSuggested(true)
     }).catch(() => {
+      // Only apply if this is still the latest detection (not stale)
+      if (currentGen !== bpmDetectionGenRef.current) return
+      
       // Keep defaults if detection fails
       setBpmSuggested(false)
       setOffsetSuggested(false)

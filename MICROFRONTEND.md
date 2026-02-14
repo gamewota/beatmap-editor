@@ -61,8 +61,8 @@ Or manually trigger from **Actions** tab → **Deploy to GitHub Pages**.
 <html>
 <head>
   <!-- Load React (peer dependencies) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://esm.sh/react@19/umd/react.production.min.js"></script>
+  <script src="https://esm.sh/react-dom@19/umd/react-dom.production.min.js"></script>
 </head>
 <body>
   <!-- Use the web component -->
@@ -193,12 +193,12 @@ npm run dev
 npm run build
 
 # Build as library (for microfrontend)
-BUILD_MODE=lib npm run build
+npm run build:lib
 ```
 
 ## 📁 Build Outputs
 
-After building as library (`BUILD_MODE=lib`):
+After building as library (`npm run build:lib`):
 
 ```
 dist/

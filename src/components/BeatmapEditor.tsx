@@ -70,6 +70,8 @@ export default function BeatmapEditor({
   // Store current ghost time (after snap) as single source of truth for placement
   const currentGhostTimeRef = useRef<number | null>(null)
   const currentGhostLaneRef = useRef<number | null>(null)
+  // Flag to distinguish programmatic scrolls from user scrolls
+  const isProgrammaticScrollRef = useRef(false)
 
   // Track which SFX state to use
   const effectiveSfxEnabled = onSfxEnabledChange ? sfxEnabled : internalSfxEnabled
@@ -417,11 +419,19 @@ export default function BeatmapEditor({
     
     const scrollContainer = scrollContainerRef.current
     
+    // Mark as programmatic scroll to prevent feedback loop
+    isProgrammaticScrollRef.current = true
+    
     // Use viewport auto-scroll
     viewport.autoScrollToTime(currentTime * 1000, 0.3)
     
     // Sync container scroll with viewport
     scrollContainer.scrollLeft = viewport.getScrollLeft()
+    
+    // Reset flag after scroll event fires (in next frame)
+    requestAnimationFrame(() => {
+      isProgrammaticScrollRef.current = false
+    })
   }, [currentTime, viewport])
 
   // Update viewport on manual scroll (critical for note visibility)
@@ -431,6 +441,11 @@ export default function BeatmapEditor({
 
     const handleScroll = () => {
       if (!rendererRef.current || !scrollContainerRef.current) return
+      
+      // Ignore programmatic scrolls to prevent feedback loop
+      if (isProgrammaticScrollRef.current) {
+        return
+      }
       
       // Update viewport scroll position
       viewport.setScrollLeft(scrollContainerRef.current.scrollLeft)
