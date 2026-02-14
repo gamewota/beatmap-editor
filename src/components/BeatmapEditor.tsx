@@ -105,6 +105,8 @@ export default function BeatmapEditor({
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
+      rendererRef.current?.dispose()
+      rendererRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

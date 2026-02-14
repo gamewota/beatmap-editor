@@ -9,6 +9,8 @@ interface WaveformProps {
   className?: string
   containerRef?: React.RefObject<HTMLDivElement>
   onScroll?: (scrollLeft: number) => void
+  /** If true, waveform canvas is not clickable - use external scrubber instead */
+  disableCanvasInteraction?: boolean
 }
 
 export default function Waveform({ 
@@ -18,11 +20,13 @@ export default function Waveform({
   onSeek, 
   className = '', 
   containerRef,
-  onScroll 
+  onScroll,
+  disableCanvasInteraction = false
 }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [, setViewportVersion] = useState(0) // Force re-render on viewport changes
+  const isProgrammaticScrollRef = useRef(false) // Flag to prevent scroll feedback loop
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -121,7 +125,7 @@ export default function Waveform({
   }, [viewport])
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !onSeek) return
+    if (disableCanvasInteraction || !canvasRef.current || !onSeek) return
     setIsDragging(true)
     const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left + (containerRef?.current?.scrollLeft || 0)
@@ -131,7 +135,7 @@ export default function Waveform({
   }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !canvasRef.current || !onSeek) return
+    if (!isDragging || disableCanvasInteraction || !canvasRef.current || !onSeek) return
     const rect = canvasRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left + (containerRef?.current?.scrollLeft || 0)
     // Convert pixel to time using viewport
@@ -158,11 +162,19 @@ export default function Waveform({
     
     const scrollContainer = containerRef.current
     
+    // Mark as programmatic scroll to prevent feedback loop
+    isProgrammaticScrollRef.current = true
+    
     // Use viewport auto-scroll
     viewport.autoScrollToTime(currentTime * 1000, 0.3)
     
     // Sync container scroll with viewport
     scrollContainer.scrollLeft = viewport.getScrollLeft()
+    
+    // Clear the flag after scroll completes (in a microtask)
+    Promise.resolve().then(() => {
+      isProgrammaticScrollRef.current = false
+    })
   }, [currentTime, viewport, containerRef])
 
   // Handle scroll synchronization
@@ -171,6 +183,11 @@ export default function Waveform({
     if (!scrollContainer) return
 
     const handleScroll = () => {
+      // Ignore programmatic scrolls to prevent feedback loop
+      if (isProgrammaticScrollRef.current) {
+        return
+      }
+      
       // Update viewport scroll position
       viewport.setScrollLeft(scrollContainer.scrollLeft)
       
@@ -191,7 +208,8 @@ export default function Waveform({
       style={{ 
         width: `${viewport.getTotalWidth()}px`,
         height: '100%', 
-        minWidth: '100%' 
+        minWidth: '100%',
+        pointerEvents: disableCanvasInteraction ? 'none' : 'auto'
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

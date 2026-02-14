@@ -5,6 +5,7 @@ import Title from './components/Title'
 import Icon from './components/Icon'
 import Slider from './components/Slider'
 import Waveform from './components/Waveform'
+import AudioScrubber from './components/AudioScrubber'
 import BeatmapEditor from './components/BeatmapEditor'
 import type { Note } from './components/BeatmapEditor'
 import { detectBPM } from './utils/bpmDetection'
@@ -75,11 +76,24 @@ function App() {
 
     // Decode audio for waveform and analysis
     const audioContext = new AudioContext()
-    const arrayBuffer = await file.arrayBuffer()
-    const decoded = await audioContext.decodeAudioData(arrayBuffer)
-    setAudioBuffer(decoded)
+    let decoded: AudioBuffer | null = null
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      decoded = await audioContext.decodeAudioData(arrayBuffer)
+      setAudioBuffer(decoded)
+      // Use decoded buffer duration for timeline (more accurate than audio element)
+      setDuration(decoded.duration)
+    } catch (error) {
+      console.error('Failed to decode audio:', error)
+      alert('Failed to decode audio file. Please try a different file.')
+      return
+    } finally {
+      // Always close the AudioContext to release resources
+      await audioContext.close()
+    }
     
     // Auto-detect BPM and offset (non-blocking suggestion)
+    if (!decoded) return
     detectBPM(decoded).then(result => {
       setBpm(result.bpm)
       setBpmSuggested(true)
@@ -124,7 +138,9 @@ function App() {
     audioRef.current = audio
 
     audio.addEventListener('loadedmetadata', () => {
-      setDuration(audio.duration)
+      // Only set duration from audio element if not already set from decoded buffer
+      // This ensures the waveform and editor use the same duration source
+      setDuration(prev => prev > 0 ? prev : audio.duration)
     })
 
     audio.addEventListener('timeupdate', () => {
@@ -224,6 +240,10 @@ function App() {
   }
 
   const handleExport = () => {
+    // Guard against empty audio or placeholder title
+    if (!audioBuffer) return
+    if (musicTitle === 'Music Title will go here') return
+
     // Convert editor notes to beatmap JSON format
     const beatmapItems = notes.map(note => ({
       button_type: note.type === 'tap' ? 0 : 1,
@@ -320,6 +340,23 @@ function App() {
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.keyCode === 32) {
+        // Ignore space key in editable/interactive elements
+        const target = e.target as HTMLElement
+        const tagName = target.tagName.toLowerCase()
+        const isEditable = target.isContentEditable
+        const role = target.getAttribute('role')
+        
+        if (
+          tagName === 'input' ||
+          tagName === 'textarea' ||
+          tagName === 'select' ||
+          isEditable ||
+          role === 'button' ||
+          role === 'link'
+        ) {
+          return
+        }
+        
         e.preventDefault()
         if (!audioRef.current) return
         
@@ -368,7 +405,7 @@ function App() {
             <option value="aki-p">Aki-P</option>
           </select>
           <Button variant="secondary" onClick={handleImportClick} disabled={!audioBuffer}>Import</Button>
-          <Button variant="secondary" onClick={handleExport}>Export</Button>
+          <Button variant="secondary" onClick={handleExport} disabled={!audioBuffer || musicTitle === 'Music Title will go here'}>Export</Button>
         </div>
       </section>
       <section className='flex items-center justify-around'>
@@ -456,15 +493,26 @@ function App() {
           </div>
         </div>
       </section>
-      <section className='flex justify-center mt-4'>
-        <div ref={waveformContainerRef} className='w-full h-40 border-2 rounded-md overflow-x-auto'>
+      {/* Audio Scrubber - Fixed width, not scrollable */}
+      <section className='flex justify-center mt-4 px-4'>
+        <AudioScrubber
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={handleSeek}
+          className='h-10 w-full max-w-4xl'
+        />
+      </section>
+
+      {/* Waveform - Scrollable with viewport */}
+      <section className='flex justify-center mt-2'>
+        <div ref={waveformContainerRef} className='w-full h-32 border-2 rounded-md overflow-x-auto'>
           <Waveform 
             audioBuffer={audioBuffer} 
             currentTime={currentTime} 
             viewport={viewport}
-            onSeek={handleSeek}
-            className='w-full h-20'
+            className='w-full h-full'
             containerRef={waveformContainerRef}
+            disableCanvasInteraction={true}
           />
         </div>
       </section>

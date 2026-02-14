@@ -36,6 +36,7 @@ export class TimelineRenderer {
   private cachedHeight = 0
   private needsStaticRedraw = true
   private viewport: TimelineViewport
+  private unsubscribeViewport: (() => void) | null = null
 
   constructor(
     staticCanvas: HTMLCanvasElement,
@@ -59,7 +60,7 @@ export class TimelineRenderer {
     this.dynamicCtx = dynamicCtx
 
     // Subscribe to viewport changes and trigger re-render callback
-    this.viewport.subscribe(() => {
+    this.unsubscribeViewport = this.viewport.subscribe(() => {
       this.needsStaticRedraw = true
       // Viewport changes require re-render (zoom, scroll, etc.)
       // The subscriber (BeatmapEditor) will call renderStatic()
@@ -386,5 +387,15 @@ export class TimelineRenderer {
 
   getViewport(): TimelineViewport {
     return this.viewport
+  }
+
+  dispose() {
+    // Unsubscribe from viewport to prevent memory leaks
+    if (this.unsubscribeViewport) {
+      this.unsubscribeViewport()
+      this.unsubscribeViewport = null
+    }
+    // Clear references to help garbage collection
+    this.needsStaticRedraw = false
   }
 }

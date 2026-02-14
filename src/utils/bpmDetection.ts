@@ -47,6 +47,11 @@ export async function detectBPM(audioBuffer: AudioBuffer): Promise<BPMDetectionR
 function normalizeBPM(bpm: number): number {
   let normalized = bpm;
   
+  // Guard against non-positive input to prevent infinite loops
+  if (normalized <= 0) {
+    normalized = 120;
+  }
+  
   // Handle double/half tempo detection errors
   while (normalized < 70) {
     normalized *= 2;
