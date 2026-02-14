@@ -30,7 +30,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
         
-      - name: Build
+      - name: Build Library
+        run: npm run build:lib
+        
+      - name: Build Demo App
         run: npm run build
         env:
           GITHUB_PAGES: 'true'

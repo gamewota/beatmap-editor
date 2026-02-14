@@ -19,7 +19,7 @@ class BeatmapEditorElement extends HTMLElement {
   
   // Observed attributes
   static get observedAttributes() {
-    return ['bpm', 'snap-enabled', 'snap-division', 'offset-ms', 'zoom', 'notes'];
+    return ['bpm', 'snap-enabled', 'snap-division', 'offset-ms', 'zoom', 'notes', 'duration'];
   }
   
   constructor() {
@@ -90,24 +90,30 @@ class BeatmapEditorElement extends HTMLElement {
     const snapDivision = parseInt(this.getAttribute('snap-division') || '4', 10);
     const offsetMs = parseInt(this.getAttribute('offset-ms') || '0', 10);
     const zoom = parseInt(this.getAttribute('zoom') || '100', 10);
+    const duration = parseInt(this.getAttribute('duration') || '300', 10);
     
-    // Update viewport zoom
+    // Update viewport zoom and duration
     this.viewport.setZoom(zoom / 100);
+    this.viewport.setDuration(duration * 1000);
     
     // Use passed notes, internal notes, or empty array
     const notes = notesParam ?? this._notes;
     
     // Create React element
     const element = React.createElement(BeatmapEditor, {
-      duration: 300,
+      duration,
       currentTime: 0,
       notes,
-      onNotesChange: (notes) => {
+      onNotesChange: (notesOrUpdater) => {
+        // Handle functional updater form
+        const newNotes = typeof notesOrUpdater === 'function' 
+          ? notesOrUpdater(this._notes) 
+          : notesOrUpdater;
         // Update internal state
-        this._notes = notes;
+        this._notes = newNotes;
         // Dispatch custom event
         this.dispatchEvent(new CustomEvent('noteschange', {
-          detail: { notes },
+          detail: { notes: newNotes },
           bubbles: true,
           composed: true
         }));
@@ -135,13 +141,15 @@ class BeatmapEditorElement extends HTMLElement {
   
   public importBeatmap(json: string) {
     try {
+      // Parse and validate JSON first
       this._notes = JSON.parse(json);
+      // Set attribute with normalized JSON (triggers attributeChangedCallback → render)
+      this.setAttribute('notes', JSON.stringify(this._notes));
     } catch {
+      // Invalid JSON - reject early, don't set attribute
       this._notes = [];
+      console.error('importBeatmap: Invalid JSON provided');
     }
-    // Reflect to attribute if desired
-    this.setAttribute('notes', json);
-    this.render(this._notes);
   }
 }
 

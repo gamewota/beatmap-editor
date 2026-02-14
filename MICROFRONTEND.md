@@ -61,8 +61,8 @@ Or manually trigger from **Actions** tab → **Deploy to GitHub Pages**.
 <html>
 <head>
   <!-- Load React (peer dependencies) -->
-  <script src="https://esm.sh/react@19/umd/react.production.min.js"></script>
-  <script src="https://esm.sh/react-dom@19/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
 </head>
 <body>
   <!-- Use the web component -->

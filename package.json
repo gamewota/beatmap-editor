@@ -7,7 +7,6 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:lib": "tsc -b && BUILD_MODE=lib vite build",
-    "build:gh-pages": "tsc -b && GITHUB_PAGES=true vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

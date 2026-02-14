@@ -47,7 +47,9 @@ export class TimelineViewport {
    * Notify all listeners of state change
    */
   private notify() {
-    this.listeners.forEach(listener => listener(this.getState()))
+    this.listeners.forEach(listener => {
+      listener(this.getState())
+    })
   }
 
   /**

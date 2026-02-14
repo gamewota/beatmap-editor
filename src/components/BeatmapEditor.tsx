@@ -17,7 +17,7 @@ interface BeatmapEditorProps {
   duration: number  // Kept for API compatibility, viewport manages actual duration
   currentTime: number
   notes: Note[]
-  onNotesChange: (notes: Note[]) => void
+  onNotesChange: (notes: Note[] | ((prev: Note[]) => Note[])) => void
   bpm?: number
   snapEnabled?: boolean
   snapDivision?: number
@@ -266,7 +266,9 @@ export default function BeatmapEditor({
     sfxManagerRef.current = new SfxManager()
 
     return () => {
-      sfxManagerRef.current?.cleanup()
+      sfxManagerRef.current?.cleanup().catch(() => {
+        // Ignore cleanup errors during unmount
+      })
     }
   }, [])
 
@@ -277,8 +279,8 @@ export default function BeatmapEditor({
     const currentTimeMs = currentTime * 1000
     const lastTimeMs = lastTimeRef.current * 1000
 
-    // Reset played notes when seeking backwards or stopped
-    if (currentTimeMs < lastTimeMs) {
+    // Reset played notes when seeking backwards, stopped, or reset to start
+    if (currentTimeMs < lastTimeMs || currentTimeMs === 0) {
       playedNotesRef.current.clear()
     }
 
@@ -296,6 +298,16 @@ export default function BeatmapEditor({
 
     lastTimeRef.current = currentTime
   }, [currentTime, notes, effectiveSfxEnabled])
+
+  // Clear played notes when SFX is disabled or on unmount
+  useEffect(() => {
+    if (!effectiveSfxEnabled) {
+      playedNotesRef.current.clear()
+    }
+    return () => {
+      playedNotesRef.current.clear()
+    }
+  }, [effectiveSfxEnabled])
 
   // Convert time to pixel using renderer's scale (used for note deletion detection)
   const timeToPixel = useCallback((time: number): number => {
@@ -319,7 +331,7 @@ export default function BeatmapEditor({
         time: clickTime,
         type: 'tap'
       }
-      onNotesChange([...notes, newNote])
+      onNotesChange(prev => [...prev, newNote])
     } else if (selectedNoteType === 'hold') {
       if (!isPlacingHold) {
         setIsPlacingHold(true)
@@ -334,7 +346,7 @@ export default function BeatmapEditor({
           type: 'hold',
           duration: Math.abs(clickTime - holdStartTime)
         }
-        onNotesChange([...notes, newNote])
+        onNotesChange(prev => [...prev, newNote])
         setIsPlacingHold(false)
       } else {
         setIsPlacingHold(false)
@@ -392,17 +404,19 @@ export default function BeatmapEditor({
         return distance <= 15
       } else if (note.type === 'hold') {
         // Check if click is within hold note bounds
+        // Match TimelineRenderer.drawNotes: height 16, centered vertically
+        const HOLD_HEIGHT = 16
         const startX = timeToPixel(note.time)
         const endX = timeToPixel(note.time + (note.duration || 0))
-        const noteY = note.lane * LANE_HEIGHT + 20
-        return x >= startX && x <= endX && y >= noteY && y <= noteY + 20
+        const noteY = note.lane * LANE_HEIGHT + (LANE_HEIGHT - HOLD_HEIGHT) / 2
+        return x >= startX && x <= endX && y >= noteY && y <= noteY + HOLD_HEIGHT
       }
 
       return false
     })
 
     if (clickedNote) {
-      onNotesChange(notes.filter(n => n.id !== clickedNote.id))
+      onNotesChange(prev => prev.filter(n => n.id !== clickedNote.id))
     }
   }, [notes, onNotesChange, timeToPixel])
 

@@ -318,19 +318,48 @@ function App() {
           setDifficulty('easy')
         }
 
-        // Convert beatmap items to editor notes
+        // Convert beatmap items to editor notes with validation
         const importedNotes: Note[] = json.beatmap.items.map((item: {
           button_type: number
           button_direction: number
           button_time: number
           button_duration: number
-        }) => ({
-          id: crypto.randomUUID(),
-          lane: item.button_direction,
-          time: item.button_time,
-          type: item.button_type === 0 ? 'tap' : 'hold',
-          duration: item.button_type === 1 ? item.button_duration : undefined
-        }))
+        }) => {
+          // Validate numeric fields
+          const buttonTime = Number(item.button_time)
+          const buttonType = Number(item.button_type)
+          const buttonDirection = Number(item.button_direction)
+          const buttonDuration = Number(item.button_duration)
+
+          // Skip items with invalid time or type
+          if (!isFinite(buttonTime) || !isFinite(buttonType)) {
+            console.warn('Skipping invalid note: button_time or button_type is not numeric', item)
+            return null
+          }
+
+          // Clamp lane to valid range [0, 4]
+          const lane = Math.max(0, Math.min(4, Math.floor(buttonDirection)))
+          if (lane !== buttonDirection) {
+            console.warn(`Clamped lane from ${buttonDirection} to ${lane}`)
+          }
+
+          // Determine note type (0 = tap, 1 = hold)
+          const type: Note['type'] = buttonType === 0 ? 'tap' : 'hold'
+
+          // Only set duration for hold notes with positive duration
+          let duration: number | undefined
+          if (type === 'hold' && isFinite(buttonDuration) && buttonDuration > 0) {
+            duration = buttonDuration
+          }
+
+          return {
+            id: crypto.randomUUID(),
+            lane,
+            time: buttonTime,
+            type,
+            duration
+          }
+        }).filter((note: Note | null): note is Note => note !== null)
 
         // Clear existing notes and load imported ones
         setNotes(importedNotes)

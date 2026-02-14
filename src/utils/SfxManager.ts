@@ -101,9 +101,13 @@ export class SfxManager {
     source.start(0)
   }
 
-  cleanup() {
+  async cleanup() {
     if (this.audioContext) {
-      this.audioContext.close()
+      try {
+        await this.audioContext.close()
+      } catch (error) {
+        console.error('Failed to close AudioContext:', error)
+      }
       this.audioContext = null
     }
     this.sfxBuffer = null
