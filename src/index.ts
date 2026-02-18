@@ -30,6 +30,9 @@
  * ```
  */
 
+// Import styles to be bundled with the library
+import './style.css'
+
 // Main component
 export { default as BeatmapEditor } from './components/BeatmapEditor'
 
