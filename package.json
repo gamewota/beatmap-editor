@@ -1,14 +1,33 @@
 {
-  "name": "beatmap-editor",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@gamewota/beatmap-editor",
+  "version": "1.0.0",
+  "description": "A React component library for editing rhythm game beatmaps",
   "type": "module",
+  "main": "./dist/beatmap-editor.umd.cjs",
+  "module": "./dist/beatmap-editor.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/beatmap-editor.js",
+      "require": "./dist/beatmap-editor.umd.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:lib": "tsc -b && BUILD_MODE=lib vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && BUILD_MODE=lib vite build",
+    "build:wc": "tsc -b && BUILD_MODE=wc vite build",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",

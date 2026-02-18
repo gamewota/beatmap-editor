@@ -104,11 +104,7 @@ class BeatmapEditorElement extends HTMLElement {
       duration,
       currentTime: 0,
       notes,
-      onNotesChange: (notesOrUpdater) => {
-        // Handle functional updater form
-        const newNotes = typeof notesOrUpdater === 'function' 
-          ? notesOrUpdater(this._notes) 
-          : notesOrUpdater;
+      onNotesChange: (newNotes) => {
         // Update internal state
         this._notes = newNotes;
         // Dispatch custom event

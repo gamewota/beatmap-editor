@@ -56,9 +56,19 @@ export default function AudioScrubber({
   }, [isDragging])
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
-  const hoverPercent = hoverX !== null && scrubberRef.current 
-    ? (hoverX / scrubberRef.current.getBoundingClientRect().width) * 100 
-    : null
+  
+  // Store hoverPercent in state to avoid ref access during render
+  const [hoverPercent, setHoverPercent] = useState<number | null>(null)
+  
+  // Calculate hover percent in effect to avoid ref access during render
+  useEffect(() => {
+    if (hoverX !== null && scrubberRef.current) {
+      const width = scrubberRef.current.getBoundingClientRect().width
+      setHoverPercent((hoverX / width) * 100)
+    } else {
+      setHoverPercent(null)
+    }
+  }, [hoverX])
 
   return (
     <div

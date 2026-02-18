@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# 🎵 Beatmap Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React component library for editing rhythm game beatmaps.
 
-Currently, two official plugins are available:
+## 📦 Installation
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install github:gamewota/beatmap-editor
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Quick Start
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```tsx
+import { useState } from 'react'
+import { BeatmapEditor, Note } from '@gamewota/beatmap-editor'
+import '@gamewota/beatmap-editor/style.css'
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+function App() {
+  const [notes, setNotes] = useState<Note[]>([])
+  
+  const song = {
+    id: '123',
+    title: 'Summer Vibes',
+    bpm: 128,
+    duration: 225,
+    audioUrl: 'https://cdn.example.com/songs/123/audio.mp3'
+  }
+  
+  return (
+    <BeatmapEditor
+      song={song}
+      notes={notes}
+      onNotesChange={(newNotes) => setNotes(newNotes)}
+    />
+  )
+}
 ```
+
+## 📖 Documentation
+
+- **[Integration Guide](./INTEGRATION.md)** - How to integrate into your project
+- **[Library Development](./LIBRARY.md)** - How to build, publish, and customize
+
+## ✨ Features
+
+- 🎮 **Canvas-based timeline** - Smooth, performant note editing
+- 🎵 **Audio sync** - Works with your audio player
+- 🎯 **Snap to grid** - Configurable beat snapping
+- ⌨️ **Keyboard shortcuts** - Efficient editing workflow
+- 🎨 **Customizable** - Tailwind CSS styling
+- 🔷 **TypeScript** - Full type safety
+- 💾 **Controlled component** - You control all the data
+
+## 🛠️ Tech Stack
+
+- React 18/19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Canvas API
+
+## 📄 License
+
+MIT License
