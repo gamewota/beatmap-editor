@@ -1,12 +1,13 @@
-name: Deploy to GitHub Pages
+name: Build and Deploy
 
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -15,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Build the library and demo app
   build:
     runs-on: ubuntu-latest
     steps:
@@ -29,10 +31,24 @@ jobs:
           
       - name: Install dependencies
         run: npm ci
-        
+      
+      # Build the React component library
       - name: Build Library
         run: npm run build:lib
+      
+      # Save library files for potential release
+      - name: Upload Library Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-files
+          path: |
+            dist/beatmap-editor.js
+            dist/beatmap-editor.umd.cjs
+            dist/index.d.ts
+            dist/**/*.d.ts
+          retention-days: 30
         
+      # Build the demo app for GitHub Pages (overwrites dist)
       - name: Build Demo App
         run: npm run build
         env:
@@ -41,12 +57,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
-      - name: Upload artifact
+      - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
 
-  deploy:
+  # Deploy demo app to GitHub Pages
+  deploy-pages:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -56,3 +73,28 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Create GitHub Release on version tags
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Download Library Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: library-files
+          path: ./lib
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            lib/beatmap-editor.js
+            lib/beatmap-editor.umd.cjs
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

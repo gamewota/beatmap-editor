@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { SfxManager } from '../utils/SfxManager'
 import { TimelineRenderer } from '../utils/TimelineRenderer'
-import type { TimelineViewport } from '../utils/TimelineViewport'
+import { TimelineViewport } from '../utils/TimelineViewport'
 
 export type NoteType = 'tap' | 'hold'
 
@@ -13,42 +13,90 @@ export interface Note {
   duration?: number 
 }
 
-interface BeatmapEditorProps {
-  duration: number  // Kept for API compatibility, viewport manages actual duration
-  currentTime: number
-  notes: Note[]
-  onNotesChange: (notes: Note[] | ((prev: Note[]) => Note[])) => void
+export interface Song {
+  id: string
+  title: string
+  bpm: number
+  duration: number
+  audioUrl: string
+}
+
+export interface BeatmapEditorProps {
+  /** Song data including title, bpm, duration, and audioUrl */
+  song?: Song
+  /** Total duration in seconds (deprecated: use song.duration) */
+  duration?: number
+  /** Current playback time in seconds */
+  currentTime?: number
+  /** Array of notes to display/edit */
+  notes?: Note[]
+  /** Callback when notes change */
+  onNotesChange?: (notes: Note[]) => void
+  /** BPM for grid snapping (deprecated: use song.bpm) */
   bpm?: number
+  /** Enable snap to grid */
   snapEnabled?: boolean
+  /** Snap division (1, 2, 4, 8, 16) */
   snapDivision?: number
+  /** Grid offset in milliseconds */
   offsetMs?: number
-  viewport: TimelineViewport
+  /** External viewport instance (optional - creates internal one if not provided) */
+  viewport?: TimelineViewport
+  /** Additional CSS class */
   className?: string
+  /** Enable preview SFX */
   sfxEnabled?: boolean
+  /** Callback when SFX enabled state changes */
   onSfxEnabledChange?: (enabled: boolean) => void
+  /** Callback when scroll position changes */
   onScroll?: (scrollLeft: number) => void
 }
 
 export default function BeatmapEditor({ 
-  // duration kept for API compatibility but not used - viewport manages it
-  currentTime, 
-  notes, 
+  song,
+  duration: durationProp,
+  currentTime: currentTimeProp,
+  notes: notesProp,
   onNotesChange,
-  bpm = 120,
+  bpm: bpmProp,
   snapEnabled = true,
   snapDivision = 4,
   offsetMs = 0,
-  viewport,
+  viewport: externalViewport,
   className = '',
-  sfxEnabled = true,
+  sfxEnabled: sfxEnabledProp,
   onSfxEnabledChange,
   onScroll
 }: BeatmapEditorProps) {
+  // Derive values from song prop or fall back to individual props
+  const effectiveBpm = song?.bpm ?? bpmProp ?? 120
+  const effectiveDuration = song?.duration ?? durationProp ?? 300
+  const currentTime = currentTimeProp ?? 0
+  const notes = useMemo(() => notesProp ?? [], [notesProp])
+  const effectiveSfxEnabledProp = sfxEnabledProp ?? true
+  
+  // Internal viewport if not provided externally
+  const internalViewportRef = useRef<TimelineViewport | null>(null)
+  const viewport = externalViewport ?? internalViewportRef.current
+  
+  // Initialize internal viewport on mount if needed
+  useEffect(() => {
+    if (!externalViewport && !internalViewportRef.current) {
+      internalViewportRef.current = new TimelineViewport(0, 800)
+    }
+  }, [externalViewport])
+  
+  // Update viewport duration when song/duration changes
+  useEffect(() => {
+    if (viewport) {
+      viewport.setDuration(effectiveDuration * 1000)
+    }
+  }, [viewport, effectiveDuration])
   const [selectedNoteType, setSelectedNoteType] = useState<NoteType>('tap')
   const [isPlacingHold, setIsPlacingHold] = useState(false)
   const [holdStartTime, setHoldStartTime] = useState<number>(0)
   const [holdStartLane, setHoldStartLane] = useState<number>(0)
-  const [internalSfxEnabled, setInternalSfxEnabled] = useState(sfxEnabled)
+  const [internalSfxEnabled, setInternalSfxEnabled] = useState(effectiveSfxEnabledProp)
   
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const staticCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -74,7 +122,7 @@ export default function BeatmapEditor({
   const isProgrammaticScrollRef = useRef(false)
 
   // Track which SFX state to use
-  const effectiveSfxEnabled = onSfxEnabledChange ? sfxEnabled : internalSfxEnabled
+  const effectiveSfxEnabled = onSfxEnabledChange ? effectiveSfxEnabledProp : internalSfxEnabled
   const setSfxEnabled = onSfxEnabledChange || setInternalSfxEnabled
 
   const LANES = 5
@@ -87,7 +135,7 @@ export default function BeatmapEditor({
 
   // Initialize canvas renderer
   useEffect(() => {
-    if (!staticCanvasRef.current || !dynamicCanvasRef.current) return
+    if (!staticCanvasRef.current || !dynamicCanvasRef.current || !viewport) return
 
     rendererRef.current = new TimelineRenderer(
       staticCanvasRef.current,
@@ -96,7 +144,7 @@ export default function BeatmapEditor({
       {
         lanes: LANES,
         laneHeight: LANE_HEIGHT,
-        bpm,
+        bpm: effectiveBpm,
         snapEnabled,
         snapDivision,
         offsetMs
@@ -118,7 +166,7 @@ export default function BeatmapEditor({
     if (!rendererRef.current) return
 
     rendererRef.current.updateConfig({
-      bpm,
+      bpm: effectiveBpm,
       snapEnabled,
       snapDivision,
       offsetMs
@@ -128,10 +176,12 @@ export default function BeatmapEditor({
     // because these affect the grid position
     rendererRef.current.forceStaticRedraw()
     rendererRef.current.renderStatic(notes)
-  }, [bpm, snapEnabled, snapDivision, offsetMs, notes])
+  }, [effectiveBpm, snapEnabled, snapDivision, offsetMs, notes])
 
   // Handle canvas resize
   useEffect(() => {
+    if (!viewport) return
+    
     const updateSize = () => {
       if (!scrollContainerRef.current || !rendererRef.current) return
 
@@ -169,7 +219,7 @@ export default function BeatmapEditor({
     if (!rendererRef.current) return
     rendererRef.current.forceStaticRedraw()
     rendererRef.current.renderStatic(notes)
-  }, [notes, bpm])
+  }, [notes, effectiveBpm])
 
   // Animation loop for dynamic content (playhead, ghost notes)
   // Runs at 60fps, reads from refs to avoid triggering React re-renders
@@ -205,7 +255,7 @@ export default function BeatmapEditor({
           // Snap to grid (ALWAYS enforce when snap is enabled, with offset)
           let snapHighlightTimeMs: number | null = null
           if (snapEnabled) {
-            const beatDuration = 60 / bpm
+            const beatDuration = 60 / effectiveBpm
             const snapInterval = beatDuration / snapDivision
             // Apply offset: shift time by offset, snap, then add offset back
             const hoverTimeMs = hoverTime * 1000
@@ -254,7 +304,7 @@ export default function BeatmapEditor({
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [snapEnabled, bpm, snapDivision, offsetMs])
+  }, [snapEnabled, effectiveBpm, snapDivision, offsetMs])
 
   // Sync external currentTime to internal ref (no setState in render loop)
   useEffect(() => {
@@ -301,11 +351,12 @@ export default function BeatmapEditor({
 
   // Clear played notes when SFX is disabled or on unmount
   useEffect(() => {
+    const playedNotes = playedNotesRef.current
     if (!effectiveSfxEnabled) {
-      playedNotesRef.current.clear()
+      playedNotes.clear()
     }
     return () => {
-      playedNotesRef.current.clear()
+      playedNotes.clear()
     }
   }, [effectiveSfxEnabled])
 
@@ -331,7 +382,7 @@ export default function BeatmapEditor({
         time: clickTime,
         type: 'tap'
       }
-      onNotesChange(prev => [...prev, newNote])
+      onNotesChange?.([...notes, newNote])
     } else if (selectedNoteType === 'hold') {
       if (!isPlacingHold) {
         setIsPlacingHold(true)
@@ -346,7 +397,7 @@ export default function BeatmapEditor({
           type: 'hold',
           duration: Math.abs(clickTime - holdStartTime)
         }
-        onNotesChange(prev => [...prev, newNote])
+        onNotesChange?.([...notes, newNote])
         setIsPlacingHold(false)
       } else {
         setIsPlacingHold(false)
@@ -416,20 +467,20 @@ export default function BeatmapEditor({
     })
 
     if (clickedNote) {
-      onNotesChange(prev => prev.filter(n => n.id !== clickedNote.id))
+      onNotesChange?.(notes.filter(n => n.id !== clickedNote.id))
     }
   }, [notes, onNotesChange, timeToPixel])
 
   const handleClearAll = () => {
     if (notes.length === 0) return
     if (window.confirm(`Are you sure you want to delete all ${notes.length} notes? This cannot be undone.`)) {
-      onNotesChange([])
+      onNotesChange?.([])
     }
   }
 
   // Auto-scroll to follow playhead
   useEffect(() => {
-    if (!scrollContainerRef.current || !rendererRef.current) return
+    if (!scrollContainerRef.current || !rendererRef.current || !viewport) return
     
     const scrollContainer = scrollContainerRef.current
     
@@ -451,10 +502,10 @@ export default function BeatmapEditor({
   // Update viewport on manual scroll (critical for note visibility)
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer || !rendererRef.current) return
+    if (!scrollContainer || !rendererRef.current || !viewport) return
 
     const handleScroll = () => {
-      if (!rendererRef.current || !scrollContainerRef.current) return
+      if (!rendererRef.current || !scrollContainerRef.current || !viewport) return
       
       // Ignore programmatic scrolls to prevent feedback loop
       if (isProgrammaticScrollRef.current) {
@@ -527,7 +578,7 @@ export default function BeatmapEditor({
       </div>
 
       <div ref={scrollContainerRef} className="relative border-2 rounded-md overflow-x-auto bg-gray-900">
-        <div className="relative" style={{ width: `${viewport.getTotalWidth()}px`, minWidth: '100%' }}>
+        <div className="relative" style={{ width: `${viewport?.getTotalWidth() ?? 800}px`, minWidth: '100%' }}>
           {/* Static Canvas Layer - Beat grid, lanes, notes */}
           <canvas
             ref={staticCanvasRef}
