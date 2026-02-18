@@ -33,10 +33,17 @@ export default defineConfig({
         globals: {
           react: 'React',
           'react-dom': 'ReactDOM'
+        },
+        // Ensure CSS is extracted to style.css
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+            return 'style.css'
+          }
+          return assetInfo.name || 'assets/[name][extname]'
         }
       }
     },
-    // Generate CSS file
+    // Generate CSS file - must be false to extract a single CSS file
     cssCodeSplit: false,
     emptyOutDir: false
   } : isWebComponent ? {
