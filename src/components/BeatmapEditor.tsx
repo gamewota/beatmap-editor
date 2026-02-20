@@ -314,7 +314,7 @@ export default function BeatmapEditor({
     currentTimeInternalRef.current = currentTime
   }, [currentTime])
 
-  // Initialize SFX Manager (lazy creation, no eager initialization)
+  // Initialize SFX Manager (re-initializes when sfxUrl changes)
   useEffect(() => {
     sfxManagerRef.current = new SfxManager({ sfxUrl })
 
@@ -322,8 +322,9 @@ export default function BeatmapEditor({
       sfxManagerRef.current?.cleanup().catch(() => {
         // Ignore cleanup errors during unmount
       })
+      sfxManagerRef.current = null
     }
-  }, [])
+  }, [sfxUrl])
 
   // Time-driven SFX trigger logic
   useEffect(() => {

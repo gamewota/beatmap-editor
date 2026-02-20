@@ -75,10 +75,19 @@ export class SfxManager {
         throw new Error('AudioContext was destroyed during loading')
       }
 
-      this.sfxBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+      try {
+        this.sfxBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+      } catch (decodeError) {
+        // Silently disable SFX if decoding fails
+        console.warn('SFX audio decoding failed, disabling SFX')
+        this.audioContext = null
+        this.sfxBuffer = null
+        this.isLoaded = false
+        return
+      }
       this.isLoaded = true
     } catch (error) {
-      console.warn('Failed to load SFX:', error)
+      // Silently disable SFX on any failure - no console spam
       this.audioContext = null
       this.sfxBuffer = null
       this.isLoaded = false
