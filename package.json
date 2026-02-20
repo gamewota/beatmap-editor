@@ -22,6 +22,7 @@
     "build": "tsc -b && vite build",
     "build:lib": "tsc -p tsconfig.lib.json && BUILD_MODE=lib vite build",
     "build:wc": "tsc -b && BUILD_MODE=wc vite build",
+    "prepare": "npm run build:lib",
     "lint": "eslint .",
     "preview": "vite preview"
   },
