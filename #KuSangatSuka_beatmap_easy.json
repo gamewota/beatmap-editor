@@ -1,0 +1,465 @@
+{
+  "beatmap": {
+    "id": 1,
+    "song_id": 123,
+    "difficulty": "easy",
+    "items": [
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 0.3413333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 1.7813333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 3.1786666666666665
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 4.576
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 5.973333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 7.36
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 8.757333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 10.133333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 12.896
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 14.272
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 15.989333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 18.048
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 19.413333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 20.78933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 22.165333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 24.213333333333335
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 25.930666666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 28.672
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 30.048
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 31.413333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 32.78933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 34.154666666666664
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 35.53066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 36.906666666666666
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 38.272
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 39.648
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 41.36533333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 42.730666666666664
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 44.10666666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 45.472
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 46.848
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 48.21333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 49.589333333333336
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 50.965333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 53.024
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 54.38933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 55.76533333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 57.13066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 58.496
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 59.872
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 61.248
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 62.61333333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 63.989333333333335
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 65.36533333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 66.73066666666666
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 68.10666666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 69.472
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 70.848
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 72.224
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 73.58933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 75.30666666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 77.70666666666666
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 79.072
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 80.448
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 83.872
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 85.248
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 86.61333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 87.98933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 89.70666666666666
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 91.072
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 92.43733333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 93.81333333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 95.18933333333334
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 97.93066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 99.30666666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 100.672
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 103.76533333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 105.13066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 106.50666666666666
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 108.224
+      },
+      {
+        "button_type": 0,
+        "button_direction": 2,
+        "button_duration": 0,
+        "button_time": 109.58933333333333
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 111.21066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 4,
+        "button_duration": 0,
+        "button_time": 112.65066666666667
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 20
+      },
+      {
+        "button_type": 0,
+        "button_direction": 1,
+        "button_duration": 0,
+        "button_time": 23.333333333333336
+      },
+      {
+        "button_type": 0,
+        "button_direction": 0,
+        "button_duration": 0,
+        "button_time": 27.12121212121212
+      }
+    ]
+  }
+}

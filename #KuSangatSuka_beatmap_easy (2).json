@@ -1,0 +1,21 @@
+{
+  "beatmap": {
+    "id": 1,
+    "song_id": 123,
+    "difficulty": "easy",
+    "items": [
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 1.7266666666666668
+      },
+      {
+        "button_type": 0,
+        "button_direction": 3,
+        "button_duration": 0,
+        "button_time": 3.3933333333333335
+      }
+    ]
+  }
+}

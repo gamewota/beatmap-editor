@@ -7,35 +7,18 @@ This guide is for developers who want to build, modify, or publish the Beatmap E
 ```
 src/
 ├── components/
-│   ├── BeatmapEditor.tsx    # Main React component (exported)
-│   ├── AudioScrubber.tsx    # Audio timeline scrubber (exported)
-│   ├── Waveform.tsx         # Audio waveform display (exported)
-│   ├── TimelineScrubber.tsx # Alternative scrubber (exported)
-│   ├── Button.tsx           # UI button (exported)
-│   ├── Icon.tsx             # Icon component (exported)
-│   ├── Slider.tsx           # Slider input (exported)
-│   └── Title.tsx            # Title component (exported)
+│   ├── BeatmapEditor.tsx    # Main React component
+│   ├── AudioScrubber.tsx    # Audio timeline scrubber
+│   ├── Waveform.tsx         # Audio waveform display
+│   └── ...                  # UI components
 ├── utils/
 │   ├── TimelineRenderer.ts  # Canvas rendering logic
-│   ├── TimelineViewport.ts  # Viewport/zoom management (exported)
+│   ├── TimelineViewport.ts  # Viewport/zoom management
 │   └── SfxManager.ts        # Sound effects
 ├── index.ts                 # Library entry point
 ├── web-component.ts         # Web component wrapper (optional)
 └── index.css                # Styles (Tailwind)
 ```
-
-### Exported Components
-
-The library exports the following components for use in your application:
-
-| Component | Description | Example Use Case |
-|-----------|-------------|------------------|
-| `BeatmapEditor` | Main beatmap editing canvas | Note placement and editing |
-| `Waveform` | Audio waveform visualization | Visual audio representation |
-| `AudioScrubber` | Timeline scrubber | Quick audio navigation |
-| `TimelineScrubber` | Viewport-based scrubber | Alternative to AudioScrubber |
-| `TimelineViewport` | Sync utility | Keep Waveform and Editor in sync |
-| `Button`, `Icon`, `Slider`, `Title` | UI components | Build custom controls |
 
 ## 📦 Building the Library
 

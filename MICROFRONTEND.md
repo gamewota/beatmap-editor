@@ -174,15 +174,6 @@ function App() {
 | `offset-ms` | number | 0 | Grid offset in milliseconds |
 | `zoom` | number | 100 | Zoom percentage |
 
-## 📝 Notes
-
-- The web component only includes the `BeatmapEditor` component
-- For `Waveform`, `AudioScrubber`, and full feature set, use the React library instead:
-  ```bash
-  npm install github:gamewota/beatmap-editor
-  ```
-- See [Integration Guide](./INTEGRATION.md) for React component usage
-
 ## 📡 Events
 
 | Event | Detail | Description |

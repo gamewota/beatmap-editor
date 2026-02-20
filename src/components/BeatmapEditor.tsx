@@ -68,8 +68,8 @@ export default function BeatmapEditor({
   onSfxEnabledChange,
   onScroll
 }: BeatmapEditorProps) {
-  // Derive values from song prop or fall back to individual props
-  const effectiveBpm = song?.bpm ?? bpmProp ?? 120
+  // Derive values: individual props take precedence over song props
+  const effectiveBpm = bpmProp ?? song?.bpm ?? 120
   const effectiveDuration = song?.duration ?? durationProp ?? 300
   const currentTime = currentTimeProp ?? 0
   const notes = useMemo(() => notesProp ?? [], [notesProp])
