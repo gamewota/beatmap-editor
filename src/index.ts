@@ -5,7 +5,7 @@
  * 
  * @example
  * ```tsx
- * import { BeatmapEditor, Waveform, AudioScrubber, TimelineViewport } from '@gamewota/beatmap-editor'
+ * import { BeatmapEditor } from '@gamewota/beatmap-editor'
  * import '@gamewota/beatmap-editor/style.css'
  * 
  * function App() {
@@ -18,29 +18,13 @@
  *   }
  *   
  *   const [notes, setNotes] = useState([])
- *   const [currentTime, setCurrentTime] = useState(0)
- *   const [audioBuffer, setAudioBuffer] = useState(null)
- *   const viewport = useMemo(() => new TimelineViewport(0, 800), [])
  *   
  *   return (
- *     <div>
- *       <AudioScrubber
- *         currentTime={currentTime}
- *         duration={song.duration}
- *         onSeek={setCurrentTime}
- *       />
- *       <Waveform
- *         audioBuffer={audioBuffer}
- *         currentTime={currentTime}
- *         viewport={viewport}
- *       />
- *       <BeatmapEditor
- *         song={song}
- *         notes={notes}
- *         onNotesChange={(newNotes) => setNotes(newNotes)}
- *         viewport={viewport}
- *       />
- *     </div>
+ *     <BeatmapEditor
+ *       song={song}
+ *       notes={notes}
+ *       onNotesChange={(newNotes) => setNotes(newNotes)}
+ *     />
  *   )
  * }
  * ```
@@ -86,3 +70,5 @@ export type {
 // ===============================
 export { TimelineViewport } from './utils/TimelineViewport'
 export type { TimelineViewportState } from './utils/TimelineViewport'
+export { detectBPM } from './utils/bpmDetection'
+export type { BPMDetectionResult } from './utils/bpmDetection'
