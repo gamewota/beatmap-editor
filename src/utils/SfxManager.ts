@@ -52,7 +52,7 @@ export class SfxManager {
         await this.audioContext.resume()
       }
 
-      const response = await fetch('/sfx.mp3')
+      const response = await fetch('./sfx.mp3')
       if (!response.ok) {
         throw new Error(`Failed to fetch SFX file: ${response.status}`)
       }
