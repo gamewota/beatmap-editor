@@ -77,7 +77,7 @@ export class SfxManager {
 
       try {
         this.sfxBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
-      } catch (decodeError) {
+      } catch {
         // Silently disable SFX if decoding fails
         console.warn('SFX audio decoding failed, disabling SFX')
         this.audioContext = null
@@ -86,7 +86,7 @@ export class SfxManager {
         return
       }
       this.isLoaded = true
-    } catch (error) {
+    } catch {
       // Silently disable SFX on any failure - no console spam
       this.audioContext = null
       this.sfxBuffer = null
