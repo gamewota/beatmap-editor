@@ -1,6 +1,6 @@
 # 🎵 Beatmap Editor - Integration Guide
 
-This guide explains how to integrate the Beatmap Editor into your React project.
+This guide explains how to integrate the Beatmap Editor into your React project, including the Waveform visualization and AudioScrubber components.
 
 ## 📦 Installation
 
@@ -12,14 +12,20 @@ npm install github:gamewota/beatmap-editor
 
 ## 🚀 Quick Start
 
-### 1. Import the Component
+### 1. Import the Components
 
 ```tsx
-import { BeatmapEditor, Note } from '@gamewota/beatmap-editor'
+import { 
+  BeatmapEditor, 
+  Waveform, 
+  AudioScrubber,
+  TimelineViewport,
+  Note 
+} from '@gamewota/beatmap-editor'
 import '@gamewota/beatmap-editor/style.css'
 ```
 
-### 2. Basic Usage
+### 2. Basic Usage (Beatmap Editor Only)
 
 ```tsx
 import { useState } from 'react'
@@ -49,28 +55,263 @@ function MyEditor() {
 }
 ```
 
-## ⚙️ Props Reference
+### 3. Full Setup (with Waveform & Audio Controls)
+
+For a complete beatmap editing experience with audio waveform and timeline scrubber:
+
+```tsx
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { 
+  BeatmapEditor, 
+  Waveform, 
+  AudioScrubber,
+  TimelineViewport,
+  Note, 
+  Song 
+} from '@gamewota/beatmap-editor'
+import '@gamewota/beatmap-editor/style.css'
+
+function FullEditor() {
+  const [notes, setNotes] = useState<Note[]>([])
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null)
+  const [zoom, setZoom] = useState(100)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const waveformContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Create shared viewport for syncing Waveform and BeatmapEditor
+  const viewport = useMemo(() => new TimelineViewport(0, 800), [])
+  
+  // Update viewport when duration or zoom changes
+  useEffect(() => {
+    viewport.setDuration(duration * 1000)
+  }, [duration, viewport])
+  
+  useEffect(() => {
+    viewport.setZoom(zoom / 100)
+  }, [zoom, viewport])
+  
+  const song: Song = {
+    id: '123',
+    title: 'My Song',
+    bpm: 128,
+    duration: duration,
+    audioUrl: '/audio/song.mp3'
+  }
+  
+  const handleSeek = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time
+    }
+    setCurrentTime(time)
+  }
+  
+  // Load audio and decode for waveform
+  const loadAudio = async (file: File) => {
+    const url = URL.createObjectURL(file)
+    
+    // Decode audio for waveform
+    const audioContext = new AudioContext()
+    const arrayBuffer = await file.arrayBuffer()
+    const decoded = await audioContext.decodeAudioData(arrayBuffer)
+    setAudioBuffer(decoded)
+    setDuration(decoded.duration)
+    
+    // Set audio source
+    if (audioRef.current) {
+      audioRef.current.src = url
+    }
+  }
+  
+  return (
+    <div className="container mx-auto p-4 space-y-4">
+      <h1 className="text-2xl font-bold">{song.title}</h1>
+      
+      {/* Audio Player */}
+      <audio
+        ref={audioRef}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        controls
+        className="w-full"
+      />
+      
+      {/* Audio Scrubber - Fixed width timeline */}
+      <AudioScrubber
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={handleSeek}
+        className="h-10 w-full"
+      />
+      
+      {/* Waveform - Scrollable with zoom sync */}
+      <div 
+        ref={waveformContainerRef}
+        className="h-32 border rounded overflow-x-auto"
+      >
+        <Waveform
+          audioBuffer={audioBuffer}
+          currentTime={currentTime}
+          viewport={viewport}
+          onSeek={handleSeek}
+          containerRef={waveformContainerRef}
+          disableCanvasInteraction={false}
+        />
+      </div>
+      
+      {/* Zoom Control */}
+      <div className="flex items-center gap-2">
+        <span>Zoom:</span>
+        <input
+          type="range"
+          min="25"
+          max="100"
+          value={zoom}
+          onChange={(e) => setZoom(Number(e.target.value))}
+          className="w-32"
+        />
+        <span>{zoom}%</span>
+      </div>
+      
+      {/* Beatmap Editor - Shares viewport with Waveform */}
+      <div className="bg-white rounded-lg shadow">
+        <BeatmapEditor
+          song={song}
+          notes={notes}
+          onNotesChange={setNotes}
+          currentTime={currentTime}
+          viewport={viewport}
+          snapEnabled={true}
+          snapDivision={4}
+          className="p-4"
+        />
+      </div>
+    </div>
+  )
+}
+```
+
+## 📦 Component API Reference
+
+### BeatmapEditor
+
+The main beatmap editing component with canvas-based timeline.
+
+```tsx
+<BeatmapEditor
+  song={song}                    // Required: Song data
+  notes={notes}                  // Optional: Array of notes
+  onNotesChange={setNotes}       // Optional: Notes change callback
+  currentTime={currentTime}      // Optional: Current playback time
+  viewport={viewport}            // Optional: Shared TimelineViewport
+  snapEnabled={true}             // Optional: Enable grid snapping
+  snapDivision={4}               // Optional: Snap divisions (1,2,4,8,16)
+  offsetMs={0}                   // Optional: Grid offset in ms
+  sfxEnabled={true}              // Optional: Enable preview sounds
+  className="custom-class"       // Optional: Additional CSS
+/>
+```
+
+### Waveform
+
+Audio waveform visualization that syncs with the timeline.
+
+```tsx
+<Waveform
+  audioBuffer={audioBuffer}      // Required: Decoded AudioBuffer
+  viewport={viewport}            // Required: TimelineViewport instance
+  currentTime={currentTime}      // Optional: Current playback time
+  onSeek={handleSeek}            // Optional: Click/seek callback
+  containerRef={containerRef}    // Optional: Scroll container ref
+  disableCanvasInteraction={false} // Optional: Disable click-to-seek
+  className="custom-class"       // Optional: Additional CSS
+/>
+```
+
+**Props:**
 
 | Prop | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `song` | `Song` | ✅ Yes | - | Song data (title, BPM, duration, audioUrl) |
-| `notes` | `Note[]` | ❌ No | `[]` | Array of notes to display/edit |
-| `onNotesChange` | `(notes: Note[]) => void` | ❌ No | - | Called when notes change |
-| `currentTime` | `number` | ❌ No | `0` | Current playback time in seconds |
-| `bpm` | `number` | ❌ No | `120` | BPM for grid (use song.bpm instead) |
-| `snapEnabled` | `boolean` | ❌ No | `true` | Enable grid snapping |
-| `snapDivision` | `number` | ❌ No | `4` | Snap divisions (1, 2, 4, 8, 16) |
-| `offsetMs` | `number` | ❌ No | `0` | Grid offset in milliseconds |
-| `viewport` | `TimelineViewport` | ❌ No | - | External viewport instance |
+| `audioBuffer` | `AudioBuffer \| null` | ✅ Yes | - | Decoded audio data |
+| `viewport` | `TimelineViewport` | ✅ Yes | - | Shared viewport instance |
+| `currentTime` | `number` | ❌ No | `0` | Current playback time (seconds) |
+| `onSeek` | `(time: number) => void` | ❌ No | - | Called when user clicks waveform |
+| `containerRef` | `RefObject<HTMLDivElement>` | ❌ No | - | Scroll container for sync |
+| `disableCanvasInteraction` | `boolean` | ❌ No | `false` | Disable click-to-seek |
 | `className` | `string` | ❌ No | - | Additional CSS class |
-| `sfxEnabled` | `boolean` | ❌ No | `true` | Enable preview SFX |
-| `onSfxEnabledChange` | `(enabled: boolean) => void` | ❌ No | - | SFX toggle callback |
-| `onScroll` | `(scrollLeft: number) => void` | ❌ No | - | Scroll position callback |
+
+### AudioScrubber
+
+Timeline scrubber for audio navigation with playhead and hover preview.
+
+```tsx
+<AudioScrubber
+  currentTime={currentTime}      // Required: Current time in seconds
+  duration={duration}            // Required: Total duration in seconds
+  onSeek={handleSeek}            // Required: Seek callback
+  className="custom-class"       // Optional: Additional CSS
+/>
+```
+
+**Props:**
+
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `currentTime` | `number` | ✅ Yes | - | Current playback time (seconds) |
+| `duration` | `number` | ✅ Yes | - | Total duration (seconds) |
+| `onSeek` | `(time: number) => void` | ✅ Yes | - | Called on seek |
+| `className` | `string` | ❌ No | - | Additional CSS class |
+
+### TimelineScrubber
+
+Alternative scrubber that works with TimelineViewport.
+
+```tsx
+<TimelineScrubber
+  viewport={viewport}            // Required: TimelineViewport instance
+  currentTime={currentTime}      // Required: Current time in seconds
+  onSeek={handleSeek}            // Required: Seek callback
+  containerRef={containerRef}    // Optional: Scroll container ref
+  className="custom-class"       // Optional: Additional CSS
+/>
+```
+
+### TimelineViewport
+
+Utility class for syncing multiple timeline components (Waveform, BeatmapEditor, etc.).
+
+```tsx
+const viewport = useMemo(() => new TimelineViewport(0, 800), [])
+
+// Update duration
+viewport.setDuration(durationMs)
+
+// Update zoom level (1.0 = 100%)
+viewport.setZoom(zoomLevel)
+
+// Get current state
+const state = viewport.getState()
+
+// Subscribe to changes
+const unsubscribe = viewport.subscribe(() => {
+  console.log('Viewport changed')
+})
+
+// Convert between time and pixels
+const pixel = viewport.timeToPixel(timeMs)
+const timeMs = viewport.pixelToTime(pixel)
+```
 
 ## 💾 TypeScript Types
 
 ```typescript
-import { Note, NoteType, Song, BeatmapEditorProps } from '@gamewota/beatmap-editor'
+import { 
+  Note, 
+  NoteType, 
+  Song, 
+  BeatmapEditorProps 
+} from '@gamewota/beatmap-editor'
 
 // Note data format
 interface Note {
@@ -91,21 +332,69 @@ interface Song {
 }
 
 // Note type
- type NoteType = 'tap' | 'hold'
+type NoteType = 'tap' | 'hold'
+```
+
+## 🔗 Component Synchronization
+
+To keep Waveform and BeatmapEditor in sync (same zoom, scroll position):
+
+```tsx
+function SyncedEditor() {
+  // Create single viewport instance
+  const viewport = useMemo(() => new TimelineViewport(0, 800), [])
+  
+  // Shared state
+  const [currentTime, setCurrentTime] = useState(0)
+  const [zoom, setZoom] = useState(100)
+  
+  // Update viewport zoom
+  useEffect(() => {
+    viewport.setZoom(zoom / 100)
+  }, [zoom, viewport])
+  
+  return (
+    <>
+      {/* Both components share the same viewport */}
+      <Waveform
+        viewport={viewport}
+        currentTime={currentTime}
+        // ...
+      />
+      <BeatmapEditor
+        viewport={viewport}
+        currentTime={currentTime}
+        // ...
+      />
+    </>
+  )
+}
 ```
 
 ## 📖 Complete Example
 
 ```tsx
-import { useState, useRef, useEffect } from 'react'
-import { BeatmapEditor, Note, Song } from '@gamewota/beatmap-editor'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { 
+  BeatmapEditor, 
+  Waveform, 
+  AudioScrubber,
+  TimelineViewport,
+  Note, 
+  Song 
+} from '@gamewota/beatmap-editor'
 import '@gamewota/beatmap-editor/style.css'
 
 function SongEditor() {
   const [notes, setNotes] = useState<Note[]>([])
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const waveformContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Create shared viewport
+  const viewport = useMemo(() => new TimelineViewport(0, 800), [])
   
   const song: Song = {
     id: '123',
@@ -114,6 +403,11 @@ function SongEditor() {
     duration: 225,
     audioUrl: '/audio/song.mp3'
   }
+  
+  // Update viewport duration
+  useEffect(() => {
+    viewport.setDuration(song.duration * 1000)
+  }, [song.duration, viewport])
   
   // Load existing beatmap
   useEffect(() => {
@@ -126,12 +420,18 @@ function SongEditor() {
   // Save draft on changes
   const handleNotesChange = (newNotes: Note[]) => {
     setNotes(newNotes)
-    // Auto-save to backend
     fetch(`/api/songs/${song.id}/beatmap/draft`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notes: newNotes })
     })
+  }
+  
+  const handleSeek = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time
+    }
+    setCurrentTime(time)
   }
   
   return (
@@ -149,6 +449,28 @@ function SongEditor() {
         className="w-full mb-4"
       />
       
+      {/* Audio Scrubber */}
+      <AudioScrubber
+        currentTime={currentTime}
+        duration={song.duration}
+        onSeek={handleSeek}
+        className="h-10 w-full mb-4"
+      />
+      
+      {/* Waveform */}
+      <div 
+        ref={waveformContainerRef}
+        className="h-32 border rounded overflow-x-auto mb-4"
+      >
+        <Waveform
+          audioBuffer={audioBuffer}
+          currentTime={currentTime}
+          viewport={viewport}
+          onSeek={handleSeek}
+          containerRef={waveformContainerRef}
+        />
+      </div>
+      
       {/* Beatmap Editor */}
       <div className="bg-white rounded-lg shadow">
         <BeatmapEditor
@@ -156,6 +478,7 @@ function SongEditor() {
           notes={notes}
           onNotesChange={handleNotesChange}
           currentTime={currentTime}
+          viewport={viewport}
           snapEnabled={true}
           snapDivision={4}
           className="p-4"
@@ -184,11 +507,13 @@ function SongEditor() {
 
 ## 🎨 Styling
 
-The component uses Tailwind CSS classes. You can customize the appearance by:
+The components use Tailwind CSS classes. You can customize the appearance by:
 
 1. **Using the className prop:**
    ```tsx
    <BeatmapEditor className="my-custom-class" />
+   <Waveform className="h-48" />
+   <AudioScrubber className="h-12" />
    ```
 
 2. **Overriding CSS variables:**
@@ -206,6 +531,8 @@ The component uses Tailwind CSS classes. You can customize the appearance by:
 | TypeScript errors | Ensure `moduleResolution` is `bundler` in `tsconfig.json` |
 | Notes not showing | Check that `notes` prop is an array |
 | Grid not visible | Check that `song.bpm` is set correctly |
+| Waveform not showing | Ensure `audioBuffer` is a decoded AudioBuffer |
+| Components not syncing | Pass the same `TimelineViewport` instance to both |
 
 ## 📄 License
 
