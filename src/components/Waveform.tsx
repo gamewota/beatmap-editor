@@ -7,7 +7,7 @@ interface WaveformProps {
   viewport: TimelineViewport
   onSeek?: (time: number) => void
   className?: string
-  containerRef?: React.RefObject<HTMLDivElement>
+  containerRef?: React.RefObject<HTMLDivElement | null>
   onScroll?: (scrollLeft: number) => void
   /** If true, waveform canvas is not clickable - use external scrubber instead */
   disableCanvasInteraction?: boolean
