@@ -3,12 +3,23 @@
  * This class handles loading and playing note hit sound effects
  * Reusable in both the editor and game runtime
  */
+export interface SfxManagerOptions {
+  /** Custom URL for the SFX audio file */
+  sfxUrl?: string
+}
+
 export class SfxManager {
   private audioContext: AudioContext | null = null
   private sfxBuffer: AudioBuffer | null = null
   private isLoaded = false
   private isLoading = false
   private loadPromise: Promise<void> | null = null
+  private sfxUrl: string
+
+  constructor(options: SfxManagerOptions = {}) {
+    // Use provided URL or default to absolute path
+    this.sfxUrl = options.sfxUrl ?? '/sfx.mp3'
+  }
 
   async initialize() {
     // If already loaded, return immediately
@@ -52,7 +63,7 @@ export class SfxManager {
         await this.audioContext.resume()
       }
 
-      const response = await fetch('./sfx.mp3')
+      const response = await fetch(this.sfxUrl)
       if (!response.ok) {
         throw new Error(`Failed to fetch SFX file: ${response.status}`)
       }
@@ -67,11 +78,11 @@ export class SfxManager {
       this.sfxBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
       this.isLoaded = true
     } catch (error) {
-      console.error('Failed to load SFX:', error)
+      console.warn('Failed to load SFX:', error)
       this.audioContext = null
       this.sfxBuffer = null
       this.isLoaded = false
-      throw error // Re-throw to allow caller to handle
+      // Don't throw - silently disable SFX on failure
     }
   }
 

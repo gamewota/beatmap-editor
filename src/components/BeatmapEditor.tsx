@@ -50,6 +50,8 @@ export interface BeatmapEditorProps {
   onSfxEnabledChange?: (enabled: boolean) => void
   /** Callback when scroll position changes */
   onScroll?: (scrollLeft: number) => void
+  /** Custom URL for the SFX audio file (default: '/sfx.mp3') */
+  sfxUrl?: string
 }
 
 export default function BeatmapEditor({ 
@@ -66,7 +68,8 @@ export default function BeatmapEditor({
   className = '',
   sfxEnabled: sfxEnabledProp,
   onSfxEnabledChange,
-  onScroll
+  onScroll,
+  sfxUrl
 }: BeatmapEditorProps) {
   // Derive values: individual props take precedence over song props
   const effectiveBpm = bpmProp ?? song?.bpm ?? 120
@@ -313,7 +316,7 @@ export default function BeatmapEditor({
 
   // Initialize SFX Manager (lazy creation, no eager initialization)
   useEffect(() => {
-    sfxManagerRef.current = new SfxManager()
+    sfxManagerRef.current = new SfxManager({ sfxUrl })
 
     return () => {
       sfxManagerRef.current?.cleanup().catch(() => {

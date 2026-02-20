@@ -195,6 +195,7 @@ export interface BeatmapEditorProps {
 | `snapEnabled` | ❌ No | Sensible default (true) |
 | `snapDivision` | ❌ No | Sensible default (4) |
 | `offsetMs` | ❌ No | Sensible default (0) |
+| `sfxUrl` | ❌ No | Custom URL for SFX file (default: '/sfx.mp3') |
 
 ## 🔌 Data Flow
 
