@@ -1,8 +1,28 @@
 {
   "name": "@gamewota/beatmap-editor",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A React component library for editing rhythm game beatmaps",
   "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "rhythm-game",
+    "beatmap",
+    "editor",
+    "react",
+    "react-component",
+    "audio",
+    "waveform",
+    "music",
+    "web-component"
+  ],
+  "homepage": "https://gamewota.github.io/beatmap-editor/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gamewota/beatmap-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gamewota/beatmap-editor/issues"
+  },
   "main": "./dist/beatmap-editor.umd.cjs",
   "module": "./dist/beatmap-editor.js",
   "types": "./dist/index.d.ts",

@@ -83,7 +83,7 @@ The editor reads and writes this exact shape:
 - `lane` is 0-indexed (0 = leftmost, 4 = rightmost).
 - Tap notes appear only in `notes[]`. Hold notes appear as **two** entries in `notes[]` plus one entry in `links[]` referencing them (full object copies, not pointers).
 
-Full schema reference: [INTEGRATION.md → Beatmap JSON schema](./INTEGRATION.md#beatmap-json-schema).
+Full schema reference: [INTEGRATION.md → Beatmap JSON schema](https://github.com/gamewota/beatmap-editor/blob/main/INTEGRATION.md#beatmap-json-schema).
 
 ## Snap convention
 
@@ -101,9 +101,9 @@ Sub-beat subdivisions are rendered as thin lines between measure and beat lines.
 
 ## Docs
 
-- [`INTEGRATION.md`](./INTEGRATION.md) — props, types, complete examples, schema reference
-- [`MICROFRONTEND.md`](./MICROFRONTEND.md) — using the Web Component from non-React apps
-- [`LIBRARY.md`](./LIBRARY.md) — building, contributing, and releasing the library
+- [INTEGRATION.md](https://github.com/gamewota/beatmap-editor/blob/main/INTEGRATION.md) — props, types, complete examples, schema reference
+- [MICROFRONTEND.md](https://github.com/gamewota/beatmap-editor/blob/main/MICROFRONTEND.md) — using the Web Component from non-React apps
+- [LIBRARY.md](https://github.com/gamewota/beatmap-editor/blob/main/LIBRARY.md) — building, contributing, and releasing the library
 
 ## License
 
