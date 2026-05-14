@@ -28,13 +28,14 @@ function App() {
   const [volume, setVolume] = useState(80)
   const [bpm, setBpm] = useState(120)
   const [bpmSuggested, setBpmSuggested] = useState(false)
-  const [snapEnabled, setSnapEnabled] = useState(true)
-  const [snapDivision, setSnapDivision] = useState<number>(4)
+  const [snapDivision, setSnapDivision] = useState<number>(8)
   const [offsetMs, setOffsetMs] = useState(0)
   const [offsetSuggested, setOffsetSuggested] = useState(false)
   const [zoom, setZoom] = useState(100)
   const [notes, setNotes] = useState<Note[]>([])
   const [difficulty, setDifficulty] = useState<string>('easy')
+  // Persisted chart UUID so import/export round-trips remain stable
+  const chartUuidRef = useRef<string>(crypto.randomUUID())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importFileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -251,28 +252,56 @@ function App() {
   }
 
   const handleExport = () => {
-    // Guard against empty audio or placeholder title
     if (!audioBuffer) return
     if (musicTitle === 'Music Title will go here') return
 
-    // Convert editor notes to beatmap JSON format
-    const beatmapItems = notes.map(note => ({
-      button_type: note.type === 'tap' ? 0 : 1,
-      button_direction: note.lane,
-      button_duration: note.duration || 0,
-      button_time: note.time
-    }))
+    const beatDurationMs = (60 / bpm) * 1000
 
-    const beatmapData = {
-      beatmap: {
-        id: 1,
-        song_id: 123,
-        difficulty: difficulty,
-        items: beatmapItems
+    // Convert an editor note (already snapped to the grid) to the export shape.
+    // songPos is in ms relative to offset; beat is the same position expressed
+    // in 60/bpm units. Sub-beat snaps produce fractional beats.
+    const toExportNote = (time: number, lane: number, id: string) => {
+      const songPos = time * 1000 - offsetMs
+      const beat = songPos / beatDurationMs
+      return {
+        uuid: id,
+        songPos,
+        beat,
+        label: '',
+        lane
       }
     }
 
-    // Create and download JSON file
+    const exportNotes: ReturnType<typeof toExportNote>[] = []
+    const links: { uuid: string; startNote: ReturnType<typeof toExportNote>; endNote: ReturnType<typeof toExportNote> }[] = []
+
+    notes.forEach(note => {
+      if (note.type === 'tap' || !note.duration) {
+        exportNotes.push(toExportNote(note.time, note.lane, note.id))
+        return
+      }
+      // Hold note: expand into start + end notes connected via a link
+      const startId = crypto.randomUUID()
+      const endId = crypto.randomUUID()
+      const startNote = toExportNote(note.time, note.lane, startId)
+      const endNote = toExportNote(note.time + note.duration, note.lane, endId)
+      exportNotes.push(startNote, endNote)
+      links.push({ uuid: note.id, startNote, endNote })
+    })
+
+    const beatmapData = {
+      bpm,
+      offset: offsetMs,
+      charts: [
+        {
+          uuid: chartUuidRef.current,
+          notes: exportNotes,
+          laneCount: 5,
+          links
+        }
+      ]
+    }
+
     const blob = new Blob([JSON.stringify(beatmapData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -302,76 +331,119 @@ function App() {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string)
-        
-        // Validate minimal structure
-        if (!json.beatmap || !Array.isArray(json.beatmap.items)) {
-          alert('Invalid beatmap file: missing beatmap or items array')
+
+        if (!json || !Array.isArray(json.charts) || json.charts.length === 0) {
+          alert('Invalid beatmap file: missing charts array')
           return
         }
 
-        // Import difficulty (with fallback)
-        const importedDifficulty = json.beatmap.difficulty
-        const validDifficulties = ['easy', 'normal', 'hard', 'aki-p']
-        if (importedDifficulty && validDifficulties.includes(importedDifficulty.toLowerCase())) {
-          setDifficulty(importedDifficulty.toLowerCase())
-        } else {
-          setDifficulty('easy')
+        const chart = json.charts[0]
+        if (!chart || !Array.isArray(chart.notes)) {
+          alert('Invalid beatmap file: chart is missing notes array')
+          return
         }
 
-        // Convert beatmap items to editor notes with validation
-        const importedNotes: Note[] = json.beatmap.items.map((item: {
-          button_type: number
-          button_direction: number
-          button_time: number
-          button_duration: number
-        }) => {
-          // Validate numeric fields
-          const buttonTime = Number(item.button_time)
-          const buttonType = Number(item.button_type)
-          const buttonDirection = Number(item.button_direction)
-          const buttonDuration = Number(item.button_duration)
+        const importedBpm = Number(json.bpm)
+        const importedOffset = Number(json.offset)
+        if (isFinite(importedBpm) && importedBpm > 0) {
+          setBpm(importedBpm)
+          setBpmSuggested(false)
+        }
+        if (isFinite(importedOffset)) {
+          setOffsetMs(importedOffset)
+          setOffsetSuggested(false)
+        }
 
-          // Skip items with invalid time or type
-          if (!isFinite(buttonTime) || !isFinite(buttonType)) {
-            console.warn('Skipping invalid note: button_time or button_type is not numeric', item)
-            return null
+        const usedBpm = isFinite(importedBpm) && importedBpm > 0 ? importedBpm : bpm
+        const beatDurationMs = (60 / usedBpm) * 1000
+
+        if (typeof chart.uuid === 'string' && chart.uuid) {
+          chartUuidRef.current = chart.uuid
+        }
+
+        type ExportedNote = {
+          uuid?: string
+          songPos?: number
+          beat?: number
+          label?: string
+          lane?: number
+        }
+        type ExportedLink = {
+          uuid?: string
+          startNote?: ExportedNote
+          endNote?: ExportedNote
+        }
+
+        // Resolve a note's audio time (in seconds) from its songPos/beat fields.
+        // songPos is in milliseconds (relative to offset); we re-add the offset
+        // to land on the audio timeline.
+        const resolveTime = (n: ExportedNote): number => {
+          if (typeof n.songPos === 'number' && isFinite(n.songPos)) {
+            return (n.songPos + importedOffset) / 1000
+          }
+          if (typeof n.beat === 'number' && isFinite(n.beat)) {
+            return (n.beat * beatDurationMs + importedOffset) / 1000
+          }
+          return NaN
+        }
+
+        const clampLane = (lane: unknown): number =>
+          Math.max(0, Math.min(4, Math.floor(Number(lane) || 0)))
+
+        // Build a lookup of link memberships so we can fold start/end pairs
+        // back into single editor "hold" notes.
+        const linkedNoteUuids = new Set<string>()
+        const holds: Note[] = []
+        const rawLinks: ExportedLink[] = Array.isArray(chart.links) ? chart.links : []
+
+        rawLinks.forEach(link => {
+          const start = link?.startNote
+          const end = link?.endNote
+          if (!start || !end) return
+          const startTime = resolveTime(start)
+          const endTime = resolveTime(end)
+          if (!isFinite(startTime) || !isFinite(endTime)) return
+
+          const lane = clampLane(start.lane)
+          if (clampLane(end.lane) !== lane) {
+            // Cross-lane links aren't supported in the editor model — drop them
+            // as a hold and the start/end notes will appear as taps below.
+            return
           }
 
-          // Clamp lane to valid range [0, 4]
-          const lane = Math.max(0, Math.min(4, Math.floor(buttonDirection)))
-          if (lane !== buttonDirection) {
-            console.warn(`Clamped lane from ${buttonDirection} to ${lane}`)
-          }
+          if (start.uuid) linkedNoteUuids.add(start.uuid)
+          if (end.uuid) linkedNoteUuids.add(end.uuid)
 
-          // Determine note type (0 = tap, 1 = hold)
-          const type: Note['type'] = buttonType === 0 ? 'tap' : 'hold'
-
-          // Only set duration for hold notes with positive duration
-          let duration: number | undefined
-          if (type === 'hold' && isFinite(buttonDuration) && buttonDuration > 0) {
-            duration = buttonDuration
-          }
-
-          return {
-            id: crypto.randomUUID(),
+          holds.push({
+            id: link.uuid && typeof link.uuid === 'string' ? link.uuid : crypto.randomUUID(),
             lane,
-            time: buttonTime,
-            type,
-            duration
-          }
-        }).filter((note: Note | null): note is Note => note !== null)
+            time: Math.min(startTime, endTime),
+            type: 'hold',
+            duration: Math.abs(endTime - startTime)
+          })
+        })
 
-        // Clear existing notes and load imported ones
-        setNotes(importedNotes)
-        
+        const taps: Note[] = []
+        chart.notes.forEach((rawNote: ExportedNote) => {
+          if (rawNote?.uuid && linkedNoteUuids.has(rawNote.uuid)) return
+          const time = resolveTime(rawNote)
+          if (!isFinite(time)) return
+          taps.push({
+            id: typeof rawNote.uuid === 'string' && rawNote.uuid ? rawNote.uuid : crypto.randomUUID(),
+            lane: clampLane(rawNote.lane),
+            time,
+            type: 'tap'
+          })
+        })
+
+        setNotes([...taps, ...holds])
       } catch (error) {
         console.error('Failed to import beatmap:', error)
         alert('Failed to import beatmap: Invalid JSON file')
       }
     }
     reader.readAsText(file)
-    
-    // Clear file input to allow re-importing the same file
+
     if (importFileInputRef.current) {
       importFileInputRef.current.value = ''
     }
@@ -485,23 +557,17 @@ function App() {
           <div className='border-l w-[40%] h-full p-2 flex flex-col justify-center items-center gap-1'>
             <label className='text-xs text-gray-600'>Snap</label>
             <div className='flex gap-1 items-center'>
-              <button
-                className={`px-2 py-1 text-xs rounded ${snapEnabled ? 'bg-green-500 text-white' : 'bg-gray-300'}`}
-                onClick={() => setSnapEnabled(!snapEnabled)}
-              >
-                {snapEnabled ? 'ON' : 'OFF'}
-              </button>
               <select
                 value={snapDivision}
                 onChange={(e) => setSnapDivision(Number(e.target.value))}
-                disabled={!snapEnabled}
-                className="px-1 py-1 text-xs border rounded disabled:opacity-50"
-                title={snapEnabled ? "Beat lines (thick) always visible • Snap lines (thin) for precision" : "Turn on snap to quantize notes"}
+                className="px-1 py-1 text-xs border rounded"
+                title="Notes always snap to the grid. Sub-beat lines reflect the selected division."
               >
                 <option value={1}>1/1 (Whole)</option>
                 <option value={2}>1/2 (Half)</option>
                 <option value={4}>1/4 (Quarter)</option>
                 <option value={8}>1/8 (Eighth)</option>
+                <option value={16}>1/16 (Sixteenth)</option>
               </select>
             </div>
           </div>
@@ -563,7 +629,7 @@ function App() {
           notes={notes}
           onNotesChange={setNotes}
           bpm={bpm}
-          snapEnabled={snapEnabled}
+          snapEnabled={true}
           snapDivision={snapDivision}
           offsetMs={offsetMs}
           viewport={viewport}

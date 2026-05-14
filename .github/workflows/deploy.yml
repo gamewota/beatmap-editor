@@ -62,8 +62,11 @@ jobs:
         with:
           path: './dist'
 
-  # Deploy demo app to GitHub Pages
+  # Deploy demo app to GitHub Pages.
+  # Skip on tag refs because the github-pages environment only allows branch
+  # deploys; the matching branch push already deployed the same code.
   deploy-pages:
+    if: github.ref_type != 'tag'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

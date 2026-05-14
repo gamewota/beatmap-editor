@@ -184,7 +184,7 @@ export default function BeatmapEditor({
   // Handle canvas resize
   useEffect(() => {
     if (!viewport) return
-    
+
     const updateSize = () => {
       if (!scrollContainerRef.current || !rendererRef.current) return
 
@@ -199,11 +199,25 @@ export default function BeatmapEditor({
     }
 
     updateSize()
-    
-    // Subscribe to viewport changes
+
+    // Only redraw when the timeline scale/size actually changes (zoom, duration,
+    // container width). Pure scroll changes don't need a static redraw — the
+    // canvas is full-width and scrolls natively with its container.
+    let prevPixelsPerMs = viewport.getState().pixelsPerMs
+    let prevTotalWidth = viewport.getTotalWidth()
+
     const unsubscribe = viewport.subscribe(() => {
+      const state = viewport.getState()
+      const totalWidth = viewport.getTotalWidth()
+      const structuralChange =
+        state.pixelsPerMs !== prevPixelsPerMs || totalWidth !== prevTotalWidth
+
+      if (!structuralChange) return
+
+      prevPixelsPerMs = state.pixelsPerMs
+      prevTotalWidth = totalWidth
+
       updateSize()
-      // CRITICAL: Force re-render after viewport changes (zoom, duration, etc.)
       if (rendererRef.current) {
         rendererRef.current.forceStaticRedraw()
         rendererRef.current.renderStatic(notes)
@@ -255,18 +269,15 @@ export default function BeatmapEditor({
             }
           }
           
-          // Snap to grid (ALWAYS enforce when snap is enabled, with offset)
-          let snapHighlightTimeMs: number | null = null
-          if (snapEnabled) {
-            const beatDuration = 60 / effectiveBpm
-            const snapInterval = beatDuration / snapDivision
-            // Apply offset: shift time by offset, snap, then add offset back
-            const hoverTimeMs = hoverTime * 1000
-            const snappedTimeMs = Math.round((hoverTimeMs - offsetMs) / (snapInterval * 1000)) * (snapInterval * 1000) + offsetMs
-            hoverTime = snappedTimeMs / 1000
-            // Store snap highlight position for visual feedback
-            snapHighlightTimeMs = snappedTimeMs
-          }
+          // Notes always snap to the visible grid subdivisions.
+          // Snap denominator divides the whole note (4 beats), so 1/4 = beat,
+          // 1/8 = half-beat, 1/1 = whole measure, etc.
+          const wholeDuration = (60 / effectiveBpm) * 4
+          const snapInterval = wholeDuration / snapDivision
+          const hoverTimeMs = hoverTime * 1000
+          const snappedTimeMs = Math.round((hoverTimeMs - offsetMs) / (snapInterval * 1000)) * (snapInterval * 1000) + offsetMs
+          hoverTime = snappedTimeMs / 1000
+          const snapHighlightTimeMs: number = snappedTimeMs
           
           // Reuse existing object to avoid allocations
           const reusableGhost = ghostNoteObjectRef.current
@@ -307,7 +318,7 @@ export default function BeatmapEditor({
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [snapEnabled, effectiveBpm, snapDivision, offsetMs])
+  }, [effectiveBpm, snapDivision, offsetMs])
 
   // Sync external currentTime to internal ref (no setState in render loop)
   useEffect(() => {
@@ -503,34 +514,26 @@ export default function BeatmapEditor({
     })
   }, [currentTime, viewport])
 
-  // Update viewport on manual scroll (critical for note visibility)
+  // Update viewport on manual scroll — no static redraw needed; the full-width
+  // canvas scrolls natively with the container.
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer || !rendererRef.current || !viewport) return
+    if (!scrollContainer || !viewport) return
 
     const handleScroll = () => {
-      if (!rendererRef.current || !scrollContainerRef.current || !viewport) return
-      
-      // Ignore programmatic scrolls to prevent feedback loop
-      if (isProgrammaticScrollRef.current) {
-        return
-      }
-      
-      // Update viewport scroll position
+      if (!scrollContainerRef.current || !viewport) return
+      if (isProgrammaticScrollRef.current) return
+
       viewport.setScrollLeft(scrollContainerRef.current.scrollLeft)
-      
-      // Notify parent of scroll
+
       if (onScroll) {
         onScroll(scrollContainerRef.current.scrollLeft)
       }
-      
-      rendererRef.current.forceStaticRedraw()
-      rendererRef.current.renderStatic(notes)
     }
 
-    scrollContainer.addEventListener('scroll', handleScroll)
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollContainer.removeEventListener('scroll', handleScroll)
-  }, [notes, viewport, onScroll])
+  }, [viewport, onScroll])
 
   return (
     <div className={className}>

@@ -1,6 +1,6 @@
 {
   "name": "@gamewota/beatmap-editor",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "A React component library for editing rhythm game beatmaps",
   "type": "module",
   "main": "./dist/beatmap-editor.umd.cjs",

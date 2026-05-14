@@ -125,23 +125,20 @@ export class TimelineRenderer {
     return this.viewport.pixelToTime(pixel)
   }
 
-  // Calculate grid-aligned X position for snapped notes
+  // Calculate grid-aligned X position. Notes always snap to the visible grid.
+  // Snap denominator divides the whole note (4 beats), matching music conventions.
   private getGridAlignedX(timeMs: number): number {
-    const { bpm, snapEnabled, snapDivision, offsetMs = 0 } = this.config
-    
-    if (!snapEnabled || !bpm || !snapDivision) {
-      // No snapping - use exact time position
+    const { bpm, snapDivision, offsetMs = 0 } = this.config
+
+    if (!bpm || !snapDivision) {
       return this.timeToPixel(timeMs)
     }
 
-    // Calculate which grid column this note belongs to (with offset)
     const beatDurationMs = (60 / bpm) * 1000
-    const gridIntervalMs = beatDurationMs / snapDivision
-    // Apply offset: shift time by offset, snap, then add offset back
+    const gridIntervalMs = (4 * beatDurationMs) / snapDivision
     const gridIndex = Math.round((timeMs - offsetMs) / gridIntervalMs)
     const gridColumnCenterMs = gridIndex * gridIntervalMs + offsetMs
-    
-    // Return pixel position of grid column center
+
     return this.timeToPixel(gridColumnCenterMs)
   }
 
@@ -166,16 +163,16 @@ export class TimelineRenderer {
     // Draw beat grid lines
     this.drawBeatGrid(ctx, bpm, state.durationMs / 1000)
 
-    // Draw lane dividers
+    // Draw lane dividers (batched in a single path)
     ctx.strokeStyle = '#374151' // border-gray-700
     ctx.lineWidth = 1
+    ctx.beginPath()
     for (let i = 1; i < lanes; i++) {
       const y = i * laneHeight
-      ctx.beginPath()
       ctx.moveTo(0, y)
       ctx.lineTo(totalWidth, y)
-      ctx.stroke()
     }
+    ctx.stroke()
 
     // Draw lane labels
     ctx.fillStyle = '#ffffff'
@@ -193,95 +190,150 @@ export class TimelineRenderer {
   private drawBeatGrid(ctx: CanvasRenderingContext2D, bpm: number, duration: number) {
     if (bpm === 0 || duration === 0) return
 
-    const { offsetMs = 0 } = this.config
+    const { offsetMs = 0, snapDivision = 8 } = this.config
     const beatDurationMs = (60 / bpm) * 1000
     const durationMs = duration * 1000
-    
-    // VISIBLE grid lines - users need to see the grid!
-    const measureLineColor = 'rgba(255, 255, 255, 0.6)'  // White - very visible
-    const beatLineColor = 'rgba(100, 200, 255, 0.4)'     // Cyan - visible
-    
-    // Helper to draw a grid level (with offset support)
-    const drawGridLevel = (intervalMs: number) => {
-      // Start from offset, then iterate
-      let currentTimeMs = offsetMs
-      while (currentTimeMs <= durationMs) {
-        const x = Math.round(this.timeToPixel(currentTimeMs))
-        
-        // Check if this is a measure line (every 4 beats from offset)
-        const beatIndexFromOffset = Math.round((currentTimeMs - offsetMs) / beatDurationMs)
-        const isMeasure = beatIndexFromOffset % 4 === 0 && 
-          Math.abs(currentTimeMs - offsetMs - beatIndexFromOffset * beatDurationMs) < 1
-        
-        if (isMeasure) {
-          // Measure lines: bright white, thick
-          ctx.strokeStyle = measureLineColor
-          ctx.lineWidth = 3
-        } else {
-          // Beat lines: cyan, medium
-          ctx.strokeStyle = beatLineColor
-          ctx.lineWidth = 1.5
-        }
+    const height = this.cachedHeight
 
-        ctx.beginPath()
-        ctx.moveTo(x, 0)
-        ctx.lineTo(x, this.cachedHeight)
-        ctx.stroke()
+    // Snap denominator follows the music convention: 1/1 = whole note (1 snap
+    // per measure), 1/4 = quarter note (1 snap per beat), 1/8 = eighth, etc.
+    // So the snap interval divides the WHOLE NOTE (4 beats in 4/4), not a beat.
+    const subdivisionDiv = Math.max(1, Math.floor(snapDivision))
+    const wholeDurationMs = 4 * beatDurationMs
+    const subdivisionIntervalMs = wholeDurationMs / subdivisionDiv
 
-        currentTimeMs += intervalMs
+    if (!isFinite(subdivisionIntervalMs) || subdivisionIntervalMs <= 0) return
+
+    // Iterate the full timeline duration so the static canvas covers all of it
+    // (canvas scrolls natively with the container; we paint once, scroll is free).
+    const firstIdx = Math.max(0, Math.ceil(-offsetMs / subdivisionIntervalMs))
+    const lastIdx = Math.ceil((durationMs - offsetMs) / subdivisionIntervalMs)
+
+    // Collect line X positions grouped by tier so we can batch strokes
+    const subBeatXs: number[] = []
+    const beatXs: number[] = []
+    const measureXs: number[] = []
+
+    // Tier logic:
+    //   - measure boundary: every `subdivisionDiv` steps (every whole note).
+    //   - beat-aligned   : every `subdivisionDiv / 4` steps when that's an
+    //                      integer (i.e., snapDiv >= 4 and divisible by 4).
+    //                      For coarser snaps (1, 2), every snap point IS at a
+    //                      beat boundary, so the !isMeasure ones become beats.
+    for (let i = firstIdx; i <= lastIdx; i++) {
+      const timeMs = i * subdivisionIntervalMs + offsetMs
+      if (timeMs < 0 || timeMs > durationMs) continue
+
+      const x = Math.round(this.timeToPixel(timeMs))
+      const isMeasure = i % subdivisionDiv === 0
+      // A subdivision sits on a beat boundary iff (i * 4) is a multiple of
+      // subdivisionDiv — derived from time = i * 4 * beat / snapDiv.
+      const isBeatAligned = (i * 4) % subdivisionDiv === 0
+
+      if (isMeasure) {
+        measureXs.push(x)
+      } else if (isBeatAligned) {
+        beatXs.push(x)
+      } else {
+        subBeatXs.push(x)
       }
     }
-    
-    // ALWAYS render beat grid (1/1) - MAIN GRID
-    drawGridLevel(beatDurationMs)
+
+    // Draw sub-beat lines first (faintest, thinnest) — single batched stroke
+    if (subBeatXs.length > 0) {
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.15)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      for (let i = 0; i < subBeatXs.length; i++) {
+        const x = subBeatXs[i]
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+      }
+      ctx.stroke()
+    }
+
+    // Beat lines (cyan, medium)
+    if (beatXs.length > 0) {
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      for (let i = 0; i < beatXs.length; i++) {
+        const x = beatXs[i]
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+      }
+      ctx.stroke()
+    }
+
+    // Measure lines (bright white, thick) — drawn last so they sit on top
+    if (measureXs.length > 0) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      for (let i = 0; i < measureXs.length; i++) {
+        const x = measureXs[i]
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+      }
+      ctx.stroke()
+    }
   }
 
   private drawNotes(ctx: CanvasRenderingContext2D, notes: Note[]) {
-    const { laneHeight, snapEnabled } = this.config
+    const { laneHeight } = this.config
     const state = this.viewport.getState()
     const viewportEndMs = this.viewport.getViewportEndMs()
 
     // Note visual sizes (reduced for better precision)
-    const TAP_RADIUS = 10 // Reduced from 15
-    const HOLD_HEIGHT = 16 // Reduced from 20
+    const TAP_RADIUS = 10
+    const HOLD_HEIGHT = 16
 
-    notes.forEach(note => {
+    // Batch tap notes (filled arcs) — collect first, then draw in one path-ish pass.
+    // Holds are drawn individually since each has a different width.
+    ctx.fillStyle = '#3b82f6' // bg-blue-500
+    ctx.beginPath()
+    let tapCount = 0
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i]
+      if (note.type !== 'tap') continue
+
       const noteTimeMs = note.time * 1000
-      const noteEndMs = note.duration ? (note.time + note.duration) * 1000 : noteTimeMs
-
       // Viewport culling
-      if (noteEndMs < state.viewportStartMs || noteTimeMs > viewportEndMs) return
+      if (noteTimeMs < state.viewportStartMs || noteTimeMs > viewportEndMs) continue
 
-      // Use grid-aligned position when snap is enabled
-      let x = snapEnabled ? this.getGridAlignedX(noteTimeMs) : this.timeToPixel(noteTimeMs)
-      
-      // Round to eliminate sub-pixel drift at high zoom
-      x = Math.round(x)
-      
-      const y = note.lane * laneHeight
+      const x = Math.round(this.getGridAlignedX(noteTimeMs))
+      const y = note.lane * laneHeight + 30
+      ctx.moveTo(x + TAP_RADIUS, y)
+      ctx.arc(x, y, TAP_RADIUS, 0, Math.PI * 2)
+      tapCount++
+    }
+    if (tapCount > 0) ctx.fill()
 
-      if (note.type === 'tap') {
-        ctx.fillStyle = '#3b82f6' // bg-blue-500
-        ctx.beginPath()
-        ctx.arc(x, y + 30, TAP_RADIUS, 0, Math.PI * 2)
-        ctx.fill()
-      } else if (note.type === 'hold' && note.duration) {
-        const width = this.timeToPixel(note.duration * 1000)
-        ctx.fillStyle = '#eab308' // bg-yellow-500
-        const holdY = y + (60 - HOLD_HEIGHT) / 2 // Center vertically in lane
-        ctx.fillRect(x, holdY, width, HOLD_HEIGHT)
-      }
-    })
+    // Hold notes
+    ctx.fillStyle = '#eab308' // bg-yellow-500
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i]
+      if (note.type !== 'hold' || !note.duration) continue
+
+      const noteTimeMs = note.time * 1000
+      const noteEndMs = (note.time + note.duration) * 1000
+      if (noteEndMs < state.viewportStartMs || noteTimeMs > viewportEndMs) continue
+
+      const x = Math.round(this.getGridAlignedX(noteTimeMs))
+      const width = this.timeToPixel(note.duration * 1000)
+      const holdY = note.lane * laneHeight + (60 - HOLD_HEIGHT) / 2
+      ctx.fillRect(x, holdY, width, HOLD_HEIGHT)
+    }
   }
 
   renderDynamic(
-    currentTimeMs: number, 
+    currentTimeMs: number,
     ghostNote: { lane: number; time: number; type: 'tap' | 'hold' } | null,
     snapHighlightTimeMs: number | null = null
   ) {
     const ctx = this.dynamicCtx
     const totalWidth = this.viewport.getTotalWidth()
-    const { laneHeight, snapEnabled } = this.config
+    const { laneHeight } = this.config
     const state = this.viewport.getState()
 
     // Safeguard: Don't render with invalid scale
@@ -292,47 +344,36 @@ export class TimelineRenderer {
     }
 
     // Ghost note sizes (smaller than real notes for visual distinction)
-    const GHOST_TAP_RADIUS = 8 // Smaller than real note (10)
-    const GHOST_HOLD_HEIGHT = 14 // Smaller than real note (16)
-    const GHOST_HOLD_WIDTH = 24 // Fixed width for visual preview
+    const GHOST_TAP_RADIUS = 8
+    const GHOST_HOLD_HEIGHT = 14
+    const GHOST_HOLD_WIDTH = 24
 
-    // Clear
-    ctx.clearRect(0, 0, totalWidth, this.cachedHeight)
+    // Clear only the area we will repaint (visible viewport region). Big perf
+    // win vs. clearing the entire timeline-wide canvas every frame.
+    const clearX = Math.max(0, Math.floor(state.viewportStartMs * state.pixelsPerMs) - 4)
+    const clearWidth = Math.min(totalWidth - clearX, Math.ceil(state.viewportWidthPx) + 8)
+    ctx.clearRect(clearX, 0, clearWidth, this.cachedHeight)
 
-    // Draw snap target highlight (when snap is enabled and cursor is hovering)
-    if (snapEnabled && snapHighlightTimeMs !== null) {
+    // Draw snap target highlight whenever the cursor is over the grid
+    if (snapHighlightTimeMs !== null) {
       const highlightX = Math.round(this.getGridAlignedX(snapHighlightTimeMs))
-      
-      // Draw VERY VISIBLE snap target line - this shows exactly where note lands
-      ctx.strokeStyle = '#3b82f6' // Bright blue
+
+      ctx.strokeStyle = '#3b82f6'
       ctx.lineWidth = 3
       ctx.beginPath()
       ctx.moveTo(highlightX, 0)
       ctx.lineTo(highlightX, this.cachedHeight)
       ctx.stroke()
-      
-      // Draw highlighted column background - wider for visibility
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.15)' // Blue with more opacity
+
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'
       ctx.fillRect(highlightX - 12, 0, 24, this.cachedHeight)
-      
-      // Draw snap indicator at top
+
       ctx.fillStyle = '#3b82f6'
       ctx.beginPath()
       ctx.moveTo(highlightX, 0)
       ctx.lineTo(highlightX - 6, 10)
       ctx.lineTo(highlightX + 6, 10)
       ctx.fill()
-    } else if (!snapEnabled && ghostNote) {
-      // When snap is OFF, show a different indicator (white dotted line)
-      const x = Math.round(this.timeToPixel(ghostNote.time * 1000))
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
-      ctx.lineWidth = 1
-      ctx.setLineDash([4, 4])
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, this.cachedHeight)
-      ctx.stroke()
-      ctx.setLineDash([])
     }
 
     // Draw playhead
@@ -348,12 +389,9 @@ export class TimelineRenderer {
     ctx.lineTo(playheadX, this.cachedHeight)
     ctx.stroke()
 
-    // Draw ghost note
+    // Draw ghost note (always grid-aligned)
     if (ghostNote) {
-      // Use grid-aligned position when snap is enabled
-      let x = snapEnabled ? this.getGridAlignedX(ghostNote.time * 1000) : this.timeToPixel(ghostNote.time * 1000)
-      
-      // Round to eliminate sub-pixel drift at high zoom
+      let x = this.getGridAlignedX(ghostNote.time * 1000)
       x = Math.round(x)
       
       const y = ghostNote.lane * laneHeight
