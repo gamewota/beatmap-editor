@@ -1,212 +1,347 @@
-# 🎵 Beatmap Editor - Integration Guide
+# Integration Guide
 
-This guide explains how to integrate the Beatmap Editor into your React project.
+How to embed `@gamewota/beatmap-editor` in a React app.
 
-## 📦 Installation
-
-### From GitHub
+## Install
 
 ```bash
-npm install github:gamewota/beatmap-editor
+npm install @gamewota/beatmap-editor
 ```
 
-## 🚀 Quick Start
+Peer dependencies: `react@^18 || ^19`, `react-dom@^18 || ^19`.
 
-### 1. Import the Component
+If you can't use npm, you can also install directly from a tag on GitHub:
 
-```tsx
-import { BeatmapEditor, Note } from '@gamewota/beatmap-editor'
-import '@gamewota/beatmap-editor/style.css'
+```bash
+npm install github:gamewota/beatmap-editor#v1.1.0
 ```
 
-### 2. Basic Usage
+## Quick start
 
 ```tsx
 import { useState } from 'react'
-import { BeatmapEditor, Note, Song } from '@gamewota/beatmap-editor'
+import { BeatmapEditor, Note } from '@gamewota/beatmap-editor'
+import '@gamewota/beatmap-editor/style.css'
 
-function MyEditor() {
+export function MyEditor() {
   const [notes, setNotes] = useState<Note[]>([])
-  
-  const song: Song = {
-    id: '123',
-    title: 'My Song',
-    bpm: 128,
-    duration: 180,
-    audioUrl: '/audio/song.mp3'
-  }
-  
+
   return (
-    <div>
-      <h1>Edit Beatmap</h1>
-      <BeatmapEditor
-        song={song}
-        notes={notes}
-        onNotesChange={setNotes}
-      />
-    </div>
+    <BeatmapEditor
+      duration={180}      // seconds
+      bpm={175}
+      offsetMs={670}
+      snapDivision={8}
+      notes={notes}
+      onNotesChange={setNotes}
+    />
   )
 }
 ```
 
-## ⚙️ Props Reference
+Imports you'll likely use:
 
-| Prop | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `song` | `Song` | ✅ Yes | - | Song data (title, BPM, duration, audioUrl) |
-| `notes` | `Note[]` | ❌ No | `[]` | Array of notes to display/edit |
-| `onNotesChange` | `(notes: Note[]) => void` | ❌ No | - | Called when notes change |
-| `currentTime` | `number` | ❌ No | `0` | Current playback time in seconds |
-| `bpm` | `number` | ❌ No | `120` | BPM for grid (use song.bpm instead) |
-| `snapEnabled` | `boolean` | ❌ No | `true` | Enable grid snapping |
-| `snapDivision` | `number` | ❌ No | `4` | Snap divisions (1, 2, 4, 8, 16) |
-| `offsetMs` | `number` | ❌ No | `0` | Grid offset in milliseconds |
-| `viewport` | `TimelineViewport` | ❌ No | - | External viewport instance |
-| `className` | `string` | ❌ No | - | Additional CSS class |
-| `sfxEnabled` | `boolean` | ❌ No | `true` | Enable preview SFX |
-| `onSfxEnabledChange` | `(enabled: boolean) => void` | ❌ No | - | SFX toggle callback |
-| `onScroll` | `(scrollLeft: number) => void` | ❌ No | - | Scroll position callback |
+```ts
+import {
+  BeatmapEditor,
+  Waveform,
+  AudioScrubber,
+  TimelineViewport,
+  detectBPM,
+  type Note,
+  type NoteType,
+  type Song,
+  type BeatmapEditorProps,
+} from '@gamewota/beatmap-editor'
+```
 
-## 💾 TypeScript Types
+## Props
 
-```typescript
-import { Note, NoteType, Song, BeatmapEditorProps } from '@gamewota/beatmap-editor'
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `duration` | `number` | `300` | Audio length in **seconds**. Required for the grid to scale correctly. |
+| `currentTime` | `number` | `0` | Current playback position in seconds. Drive this from your audio element. |
+| `bpm` | `number` | `120` | Beats per minute. |
+| `offsetMs` | `number` | `0` | Milliseconds before the first beat (grid anchor). |
+| `snapDivision` | `number` | `8` | Snap denominator — `1`, `2`, `4`, `8`, or `16` (see [snap convention](#snap-convention)). |
+| `notes` | `Note[]` | `[]` | Notes to render. |
+| `onNotesChange` | `(notes: Note[]) => void` | — | Called when the user adds/deletes a note. |
+| `viewport` | `TimelineViewport` | internal | Pass an external instance to keep the waveform and the editor zoomed/scrolled together. |
+| `sfxEnabled` | `boolean` | `true` | Plays a tick when the playhead crosses a note. |
+| `onSfxEnabledChange` | `(enabled: boolean) => void` | — | If provided, the editor becomes controlled w.r.t. the SFX toggle. |
+| `sfxUrl` | `string` | `/sfx.mp3` | Override the SFX audio file URL. |
+| `onScroll` | `(scrollLeft: number) => void` | — | Fires when the editor is scrolled horizontally. |
+| `className` | `string` | `""` | Extra CSS class on the editor's outer `<div>`. |
+| `song` | `Song` | — | Optional convenience prop. If provided, `song.bpm` / `song.duration` are used unless `bpm` / `duration` are explicitly set. |
 
-// Note data format
+> `snapEnabled` is intentionally not in this table — placement now **always** snaps to the visible grid. Pick `snapDivision={1}` (1/1) if you want whole-note placement.
+
+## Types
+
+```ts
+type NoteType = 'tap' | 'hold'
+
 interface Note {
-  id: string       // Unique identifier
-  lane: number     // 0-4 (5 lanes)
-  time: number     // Time in seconds
-  type: 'tap' | 'hold'
-  duration?: number // For hold notes, in seconds
+  id: string          // any unique string (the editor uses crypto.randomUUID())
+  lane: number        // 0–4
+  time: number        // seconds, audio time (includes offset)
+  type: NoteType
+  duration?: number   // seconds, for type === 'hold'
 }
 
-// Song data
 interface Song {
   id: string
   title: string
   bpm: number
-  duration: number  // in seconds
-  audioUrl: string  // URL to audio file
+  duration: number    // seconds
+  audioUrl: string
 }
-
-// Note type
- type NoteType = 'tap' | 'hold'
 ```
 
-## 📖 Complete Example
+Note: the `Note.time` value is **seconds in audio time**, including the offset. The export step converts to the schema's `songPos` (ms relative to offset).
+
+## Snap convention
+
+The snap denominator divides the **whole note** (one measure in 4/4 time), matching standard music notation.
+
+| Setting | Snap interval | Visible lines per measure |
+|---|---|---|
+| 1/1 (Whole)     | 4 beats   | 1 thick measure bar |
+| 1/2 (Half)      | 2 beats   | 1 measure + 1 beat line |
+| 1/4 (Quarter)   | 1 beat    | 1 measure + 3 beat lines |
+| 1/8 (Eighth)    | 1/2 beat  | 1 measure + 3 beats + 4 sub-beats |
+| 1/16 (Sixteenth)| 1/4 beat  | 1 measure + 3 beats + 12 sub-beats |
+
+The first beat sits exactly at `offsetMs`. Sub-beat lines render as thin tinted lines; measure bars are bright white.
+
+## Complete example with audio
 
 ```tsx
-import { useState, useRef, useEffect } from 'react'
-import { BeatmapEditor, Note, Song } from '@gamewota/beatmap-editor'
+import { useEffect, useRef, useState } from 'react'
+import {
+  BeatmapEditor,
+  Waveform,
+  AudioScrubber,
+  TimelineViewport,
+  type Note,
+} from '@gamewota/beatmap-editor'
 import '@gamewota/beatmap-editor/style.css'
 
-function SongEditor() {
-  const [notes, setNotes] = useState<Note[]>([])
+export function SongEditor({ audioUrl }: { audioUrl: string }) {
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null)
+  const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
-  
-  const song: Song = {
-    id: '123',
-    title: 'Summer Vibes',
-    bpm: 128,
-    duration: 225,
-    audioUrl: '/audio/song.mp3'
-  }
-  
-  // Load existing beatmap
+  const [notes, setNotes] = useState<Note[]>([])
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const waveformContainerRef = useRef<HTMLDivElement>(null!)
+
+  // One viewport instance shared by the waveform and the editor keeps
+  // their zoom and scroll perfectly aligned.
+  const [viewport] = useState(() => new TimelineViewport(0, 800))
+
   useEffect(() => {
-    fetch(`/api/songs/${song.id}/beatmap`)
-      .then(res => res.json())
-      .then(data => setNotes(data.notes || []))
-      .catch(() => setNotes([]))
-  }, [song.id])
-  
-  // Save draft on changes
-  const handleNotesChange = (newNotes: Note[]) => {
-    setNotes(newNotes)
-    // Auto-save to backend
-    fetch(`/api/songs/${song.id}/beatmap/draft`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: newNotes })
-    })
-  }
-  
+    const audio = new Audio(audioUrl)
+    audioRef.current = audio
+    audio.addEventListener('loadedmetadata', () => setDuration(audio.duration))
+    audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime))
+
+    // Decode for the waveform
+    fetch(audioUrl)
+      .then(r => r.arrayBuffer())
+      .then(buf => new AudioContext().decodeAudioData(buf))
+      .then(setAudioBuffer)
+
+    return () => { audio.pause(); audioRef.current = null }
+  }, [audioUrl])
+
+  useEffect(() => { viewport.setDuration(duration * 1000) }, [viewport, duration])
+
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">{song.title}</h1>
-      
-      {/* Audio Player */}
-      <audio
-        ref={audioRef}
-        src={song.audioUrl}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        controls
-        className="w-full mb-4"
+    <div>
+      <button onClick={() => audioRef.current?.play()}>Play</button>
+      <button onClick={() => audioRef.current?.pause()}>Pause</button>
+
+      <AudioScrubber
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={t => { if (audioRef.current) audioRef.current.currentTime = t }}
+        className="h-10 w-full"
       />
-      
-      {/* Beatmap Editor */}
-      <div className="bg-white rounded-lg shadow">
-        <BeatmapEditor
-          song={song}
-          notes={notes}
-          onNotesChange={handleNotesChange}
+
+      <div ref={waveformContainerRef} className="h-32 overflow-x-auto">
+        <Waveform
+          audioBuffer={audioBuffer}
           currentTime={currentTime}
-          snapEnabled={true}
-          snapDivision={4}
-          className="p-4"
+          viewport={viewport}
+          containerRef={waveformContainerRef}
+          className="w-full h-full"
+          disableCanvasInteraction
         />
       </div>
-      
-      {/* Export Button */}
-      <button
-        onClick={() => {
-          const data = { songId: song.id, notes }
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `${song.title}_beatmap.json`
-          a.click()
-        }}
-        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
-      >
-        Export Beatmap
-      </button>
+
+      <BeatmapEditor
+        duration={duration}
+        currentTime={currentTime}
+        bpm={175}
+        offsetMs={670}
+        snapDivision={8}
+        notes={notes}
+        onNotesChange={setNotes}
+        viewport={viewport}
+      />
     </div>
   )
 }
 ```
 
-## 🎨 Styling
+### Auto-detecting BPM and offset
 
-The component uses Tailwind CSS classes. You can customize the appearance by:
+```ts
+import { detectBPM } from '@gamewota/beatmap-editor'
 
-1. **Using the className prop:**
-   ```tsx
-   <BeatmapEditor className="my-custom-class" />
-   ```
+const { bpm, offsetMs } = await detectBPM(audioBuffer)
+```
 
-2. **Overriding CSS variables:**
-   ```css
-   .beatmap-editor {
-     --lane-height: 60px;
-   }
-   ```
+`detectBPM` returns `{ bpm: number, offsetMs: number }`. Wrap it in a generation counter (see `src/App.tsx`) if the user can load several files in a row.
 
-## 🐛 Troubleshooting
+## Beatmap JSON schema
 
-| Issue | Solution |
-|-------|----------|
-| Styles not applying | Import the CSS: `import '@gamewota/beatmap-editor/style.css'` |
-| TypeScript errors | Ensure `moduleResolution` is `bundler` in `tsconfig.json` |
-| Notes not showing | Check that `notes` prop is an array |
-| Grid not visible | Check that `song.bpm` is set correctly |
+When you export or persist a chart, this is the shape to use. The shape was designed for game runtimes — `songPos` is the millisecond playhead position relative to the song's offset.
 
-## 📄 License
+```json
+{
+  "bpm": 175,
+  "offset": 670,
+  "charts": [
+    {
+      "uuid": "807c1493-05a8-46e8-ae11-e2bca474d5f1",
+      "laneCount": 5,
+      "notes": [
+        {
+          "uuid": "7dba52df-ef2d-4230-9f0d-39c08a85b061",
+          "songPos": 0,
+          "beat": 0,
+          "label": "",
+          "lane": 1
+        }
+      ],
+      "links": [
+        {
+          "uuid": "17c03d91-4c5d-43cf-a1f4-5d27b8008a04",
+          "startNote": {
+            "uuid": "36726d54-6cb3-40ac-9a8a-9dd7a1984860",
+            "songPos": 27428.571428571428,
+            "beat": 80,
+            "label": "",
+            "lane": 0
+          },
+          "endNote": {
+            "uuid": "7407f2ee-14df-473e-92ff-f10d52916631",
+            "songPos": 28800,
+            "beat": 84,
+            "label": "",
+            "lane": 0
+          }
+        }
+      ]
+    }
+  ]
+}
+```
 
-MIT License
+Field rules:
+
+- `bpm`, `offset` — song-level timing. `offset` is milliseconds before the first beat.
+- `charts[]` — usually one entry per difficulty. `charts[0].uuid` is stable across exports of the same chart.
+- `notes[]` — every placeable note, including the endpoints of hold notes.
+  - `songPos` — ms, relative to `offset`. Audio time = `songPos + offset`.
+  - `beat` — `songPos / (60000 / bpm)`. May be fractional for sub-beat snaps.
+  - `lane` — `0..(laneCount - 1)`, 0-indexed.
+  - `label` — currently always `""`; reserved for future per-note metadata.
+- `links[]` — connections between notes (hold / slide).
+  - `startNote` and `endNote` are **full object copies** of the linked notes (not just UUIDs).
+  - Both linked notes must also appear in `notes[]`.
+  - The editor's current note model uses one lane per hold; cross-lane links are accepted on import but dropped (the start/end notes are kept as taps).
+
+### Sample export → game data flow
+
+```ts
+// Inside your save handler
+const json = JSON.parse(await file.text())
+const { bpm, offset } = json
+const chart = json.charts[0]
+
+// At runtime: when should I trigger note at index i?
+const audioTimeMs = chart.notes[i].songPos + offset
+```
+
+## Sharing a viewport between components
+
+If you render `Waveform` alongside `BeatmapEditor`, pass the same `TimelineViewport` to both. Zooming or scrolling either one updates the other.
+
+```tsx
+const [viewport] = useState(() => new TimelineViewport(durationMs, containerWidthPx))
+// ...
+<Waveform viewport={viewport} ... />
+<BeatmapEditor viewport={viewport} ... />
+```
+
+The viewport is the single source of truth for `pixelsPerMs`, scroll position, and duration. Don't recreate it on each render.
+
+## Styling
+
+The editor uses Tailwind utility classes for its built-in UI. Import the bundled stylesheet once at the app entry:
+
+```ts
+import '@gamewota/beatmap-editor/style.css'
+```
+
+You can layer your own classes via `className`; the editor doesn't lock down its outer wrapper.
+
+If your host app already uses Tailwind, add the package's `dist` to your `content` glob so unused classes aren't purged:
+
+```js
+// tailwind.config.js
+content: [
+  './src/**/*.{ts,tsx}',
+  './node_modules/@gamewota/beatmap-editor/dist/**/*.{js,cjs}',
+]
+```
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Grid is invisible | `bpm` is 0 or `duration` is 0. Set both before mounting. |
+| Notes appear off the grid | You're storing pre-1.1.0 data with `snapEnabled={false}`. Re-snap on import. |
+| Waveform and editor scroll out of sync | Each is using its own `TimelineViewport`. Share one instance. |
+| Styles look unstyled | `style.css` wasn't imported, or Tailwind purged the package's classes (see styling note above). |
+| `Note.time` looks like ms not seconds | `time` is **seconds** in the React model; `songPos` is **ms** in the JSON schema. Don't mix them. |
+
+## Migration from pre-1.1.0
+
+If you stored beatmaps in the old `{ beatmap: { items: [...] } }` format:
+
+```ts
+// Old → new
+const oldItems = oldJson.beatmap.items  // { button_type, button_direction, button_time, button_duration }
+const beatDurationMs = (60 / bpm) * 1000
+
+const taps = oldItems
+  .filter(i => i.button_type === 0)
+  .map(i => ({
+    uuid: crypto.randomUUID(),
+    songPos: i.button_time * 1000 - offsetMs,
+    beat: (i.button_time * 1000 - offsetMs) / beatDurationMs,
+    label: '',
+    lane: i.button_direction,
+  }))
+
+// holds: emit two notes + a link per old hold (button_type === 1, duration > 0)
+```
+
+The 1.1.0 editor does not import the old format directly — convert externally and feed the new shape.
+
+## License
+
+MIT

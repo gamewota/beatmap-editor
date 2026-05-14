@@ -1,259 +1,177 @@
-# 📚 Beatmap Editor - Library Development Guide
+# Library Development
 
-This guide is for developers who want to build, modify, or publish the Beatmap Editor library.
+How to build, test, release, and contribute to the editor.
 
-## 🏗️ Architecture
+## Layout
 
 ```
 src/
 ├── components/
-│   ├── BeatmapEditor.tsx    # Main React component
-│   ├── AudioScrubber.tsx    # Audio timeline scrubber
-│   ├── Waveform.tsx         # Audio waveform display
-│   └── ...                  # UI components
+│   ├── BeatmapEditor.tsx     # Main editor — grid, notes, ghost note, click handling
+│   ├── Waveform.tsx          # Canvas waveform renderer
+│   ├── AudioScrubber.tsx     # Fixed-width seek bar
+│   ├── TimelineScrubber.tsx  # Timeline-aligned seek bar
+│   ├── Button.tsx, Icon.tsx, Slider.tsx, Title.tsx
 ├── utils/
-│   ├── TimelineRenderer.ts  # Canvas rendering logic
-│   ├── TimelineViewport.ts  # Viewport/zoom management
-│   └── SfxManager.ts        # Sound effects
-├── index.ts                 # Library entry point
-├── web-component.ts         # Web component wrapper (optional)
-└── index.css                # Styles (Tailwind)
+│   ├── TimelineViewport.ts   # Single source of truth for zoom + scroll
+│   ├── TimelineRenderer.ts   # Dual-canvas (static + dynamic) drawing
+│   ├── SfxManager.ts         # Web Audio SFX playback
+│   └── bpmDetection.ts       # detectBPM(audioBuffer)
+├── index.ts                  # Library entry — public exports
+├── web-component.ts          # <beatmap-editor> custom element wrapper
+├── App.tsx, main.tsx         # Demo app (not part of the published lib)
+└── index.css, style.css      # Tailwind sources
 ```
 
-## 📦 Building the Library
-
-### Development Mode
+## Scripts
 
 ```bash
-# Start dev server with demo app
-npm run dev
-
-# Open http://localhost:5173 to see the demo
+npm run dev          # Vite dev server for the demo (http://localhost:5173)
+npm run build        # Demo app → dist/ (used by the Pages deploy)
+npm run build:lib    # Library bundle → dist/beatmap-editor.{js,umd.cjs} + index.d.ts + style.css
+npm run build:wc     # Web Component bundle → dist/beatmap-editor-wc.{js,umd.cjs}
+npm run lint         # ESLint
 ```
 
-### Build React Component Library
+`tsc -b` runs first as part of `build` and `build:lib` so type errors fail the build.
+
+## Local consumer testing
+
+You have three options depending on how realistic you want the test to be.
+
+### Linking
 
 ```bash
-# Build the library
+# in this repo
 npm run build:lib
-
-# Output in dist/
-# - beatmap-editor.js       (ES module)
-# - beatmap-editor.umd.cjs  (UMD for legacy)
-# - index.d.ts              (TypeScript types)
-# - style.css               (Compiled CSS)
-```
-
-### Build Web Component (Microfrontend)
-
-```bash
-# Build as web component
-npm run build:wc
-
-# Output: beatmap-editor-wc.js
-```
-
-### Build Demo App
-
-```bash
-# Build the demo app
-npm run build
-
-# Output in dist/ as a static website
-```
-
-## 🚀 Publishing
-
-### Automated Deployment (GitHub Actions)
-
-The repository includes GitHub Actions workflows for automated deployment:
-
-#### On Every Push to Main/Master:
-- **Demo App**: Automatically deployed to GitHub Pages
-- **Library Files**: Saved as build artifacts
-
-#### On Version Tags (v*):
-- Creates a GitHub Release with library files attached
-- Demo app is updated on GitHub Pages
-
-### Manual Publishing
-
-#### Option 1: GitHub Registry (Recommended for internal use)
-
-```bash
-# 1. Build
-npm run build:lib
-
-# 2. Commit and tag
- git add .
- git commit -m "Build v1.0.0"
- git tag v1.0.0
- git push origin v1.0.0
-
-# 3. Install in your project
-npm install github:gamewota/beatmap-editor#v1.0.0
-```
-
-#### Option 2: NPM Registry (for public use)
-
-```bash
-# 1. Login to NPM
-npm login
-
-# 2. Build
-npm run build:lib
-
-# 3. Publish
-npm publish --access public
-```
-
-### Setting Up NPM Automation (Optional)
-
-To enable automatic NPM publishing on releases:
-
-1. Get your NPM access token from https://www.npmjs.com/settings/tokens
-2. Add it to your GitHub repository secrets as `NPM_TOKEN`
-3. The `publish.yml` workflow will automatically publish on new releases
-
-## 🧪 Testing Locally
-
-### Link for Local Development
-
-```bash
-# In the beatmap-editor repo
 npm link
 
-# In your dashboard repo
+# in the consumer repo
 npm link @gamewota/beatmap-editor
-
-# Now changes in beatmap-editor are reflected immediately
 ```
 
-### Pack for Testing
+Rebuild the library each time you change source.
+
+### Packing (closest to real npm install)
 
 ```bash
-# In beatmap-editor
 npm run build:lib
-npm pack
-
-# Copy the .tgz file to your dashboard
-npm install ./gamewota-beatmap-editor-1.0.0.tgz
+npm pack                                  # → gamewota-beatmap-editor-1.1.0.tgz
+cd ../consumer-repo
+npm install ../beatmap-editor/gamewota-beatmap-editor-1.1.0.tgz
 ```
 
-## 🔧 Customization
+### Installing the GitHub-tagged version
 
-### Styling
-
-The component uses Tailwind CSS. You can customize by:
-
-1. **Override with CSS classes:**
-   ```tsx
-   <BeatmapEditor className="my-custom-class" />
-   ```
-
-2. **Modify Tailwind config:**
-   ```js
-   // tailwind.config.js
-   module.exports = {
-     content: [
-       './src/**/*.{js,ts,jsx,tsx}',
-       './node_modules/@gamewota/beatmap-editor/dist/**/*.{js,ts,jsx,tsx}'
-     ]
-   }
-   ```
-
-### Extending the API
-
-To add new features, modify `BeatmapEditorProps` in `src/components/BeatmapEditor.tsx`:
-
-```typescript
-export interface BeatmapEditorProps {
-  // ... existing props
-  
-  // New prop
-  customGridColor?: string
-  onNoteSelect?: (note: Note) => void
-}
+```bash
+# in the consumer repo
+npm install github:gamewota/beatmap-editor#v1.1.0
 ```
 
-## 📋 Component API Design
+This installs the source repo and runs `prepare` → `npm run build:lib`, so it works without a published npm release.
 
-### Design Principles
+## Release flow
 
-1. **Controlled Component**: Parent controls all data
-2. **Pure Editor**: No API calls, all data via props and callbacks
-3. **Flexible**: Parent decides how to handle persistence
-4. **TypeScript First**: Full type safety
+The repo is wired so each `v*` tag pushes a release to GitHub *and* publishes to npm in one go.
 
-### Props Decision Matrix
+### One-time setup
 
-| Prop | Required? | Rationale |
-|------|-----------|-----------|
-| `song` | ✅ Yes | Must have song data (title, BPM, audio, duration) |
-| `notes` | ❌ No | Can start empty for new beatmaps |
-| `onNotesChange` | ❌ No | Optional - parent handles saving |
-| `snapEnabled` | ❌ No | Sensible default (true) |
-| `snapDivision` | ❌ No | Sensible default (4) |
-| `offsetMs` | ❌ No | Sensible default (0) |
-| `sfxUrl` | ❌ No | Custom URL for SFX file (default: '/sfx.mp3') |
+- **GitHub Pages**: Settings → Pages → Source = **GitHub Actions** (already configured)
+- **npm scope**: the `@gamewota` org must exist at https://www.npmjs.com/org/gamewota and your npm account must have publish rights to it
+- **`NPM_TOKEN` secret**: Settings → Secrets and variables → Actions → `NPM_TOKEN`
+  - Must be a **Classic Automation** token, or a **Granular Access Token with "Allow this token to bypass 2FA" enabled**
+  - Classic "Publish" tokens won't work in CI — they prompt for an OTP
 
-## 🔌 Data Flow
+### Cutting a release
 
-The editor is a controlled component:
+```bash
+# 1. update version
+# edit package.json: "version": "1.2.0"
 
-```typescript
-// Parent app provides song data
-const song = {
-  id: '123',
-  title: 'My Song',
-  bpm: 128,
-  duration: 180,
-  audioUrl: '/audio.mp3'
-}
+# 2. commit + push main → triggers Pages deploy
+git commit -am "release v1.2.0"
+git push origin main
 
-// Parent app handles persistence
-<BeatmapEditor
-  song={song}
-  notes={notes}
-  onNotesChange={(newNotes) => saveDraft(newNotes)}
-/>
+# 3. tag + push tag → triggers GitHub release + npm publish
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
-## 🎨 Code Style
+What happens behind the scenes:
 
-### Naming Conventions
+| Trigger | Workflow | Effect |
+|---|---|---|
+| push to `main` | `deploy.yml` → `build` + `deploy-pages` | Demo site at https://gamewota.github.io/beatmap-editor/ |
+| push tag `v*`  | `deploy.yml` → `build` + `release` + `publish-npm` | GitHub release + `npm publish` |
 
-- **Components**: PascalCase (`BeatmapEditor`)
-- **Props**: camelCase (`initialNotes`, `onNotesChange`)
-- **Types/Interfaces**: PascalCase (`BeatmapEditorProps`)
-- **Functions**: camelCase (`handlePublish`)
-- **Constants**: UPPER_SNAKE_CASE (`LANE_HEIGHT`)
+`deploy-pages` is gated on `if: github.ref_type != 'tag'` so the tag push doesn't fight with the matching branch push for the Pages environment.
 
-## 🚀 Future Enhancements
+### Manual fallback
 
-Potential features for future versions:
+If a publish needs to be re-run without bumping the version (e.g., transient registry error):
 
-- [ ] Undo/Redo functionality
-- [ ] Copy/Paste notes
-- [ ] Multiple selection
-- [ ] Zoom controls UI
-- [ ] Import/export JSON files
-- [ ] Difficulty calculator
-- [ ] Preview mode
+```bash
+gh workflow run publish.yml --repo gamewota/beatmap-editor --ref main
+```
 
-## 📄 License
+### After a successful release
 
-MIT License - See LICENSE file
+Verify:
 
-## 🤝 Contributing
+- `npm view @gamewota/beatmap-editor version` → matches the new tag
+- https://gamewota.github.io/beatmap-editor/ → loads with the new code
+- https://github.com/gamewota/beatmap-editor/releases → release attached with `beatmap-editor.js` and `beatmap-editor.umd.cjs`
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `npm run lint` to check for issues
-5. Submit a pull request
+## Architecture notes
 
-## 📞 Support
+### Single TimelineViewport
 
-- GitHub Issues: https://github.com/gamewota/beatmap-editor/issues
-- Documentation: https://github.com/gamewota/beatmap-editor/blob/main/INTEGRATION.md
+`TimelineViewport` owns `pixelsPerMs`, `viewportStartMs`, and `durationMs`. Everything else (waveform, grid, playhead, ghost note, scroll position) derives from it via subscribers. The same instance is shared between `Waveform` and `BeatmapEditor` so they can never drift out of sync.
+
+### Dual-canvas rendering
+
+`TimelineRenderer` writes to two stacked canvases:
+
+- **Static canvas** — beat grid, lane dividers, placed notes. Repaints only when zoom, duration, container size, BPM, snap, offset, or notes change.
+- **Dynamic canvas** — playhead, ghost note, snap-target highlight. Cleared and redrawn every animation frame, but only over the visible viewport rectangle.
+
+Pure scroll events don't trigger a static repaint — the full-width static canvas scrolls natively inside its container. Grid line strokes are batched by tier (measure / beat / sub-beat) so a 5-minute song at 175 BPM with 1/16 snap is three `stroke()` calls per repaint instead of thousands.
+
+### Snap math
+
+The snap denominator divides the **whole note** (4 beats in 4/4), matching standard music notation:
+
+```
+beatDurationMs   = 60_000 / bpm
+wholeDurationMs  = 4 * beatDurationMs
+snapIntervalMs   = wholeDurationMs / snapDivision
+```
+
+A drawn line at index `i` is:
+
+- a **measure** boundary if `i % snapDivision === 0`
+- a **beat** boundary if `(i * 4) % snapDivision === 0` (and not a measure)
+- a **sub-beat** otherwise
+
+The same formula is used in the click handler (so placement always lands on a visible grid line) and in `TimelineRenderer.getGridAlignedX` (so rendered notes always sit on the grid even if they were imported from an unsnapped source).
+
+## Style
+
+- Components: PascalCase
+- Props / functions: camelCase
+- Types / interfaces: PascalCase
+- Constants: UPPER_SNAKE_CASE
+
+No tests yet. Lint must pass (`npm run lint`).
+
+## Contributing
+
+1. Branch off `main`
+2. Make the change; run `npm run lint` and `npm run build`
+3. Open a PR — CI will run the build on push
+
+For non-trivial changes, please describe the user-facing behavior in the PR description and (if relevant) update the schema docs in `INTEGRATION.md`.
+
+## License
+
+MIT

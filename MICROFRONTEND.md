@@ -1,231 +1,215 @@
-# 🎵 Beatmap Editor - Microfrontend Setup
+# Web Component / Microfrontend
 
-This guide explains how to deploy the beatmap editor as a microfrontend on GitHub Pages.
+`@gamewota/beatmap-editor` also ships as a framework-agnostic Web Component (`<beatmap-editor>`). Use it when your host app isn't React, when you want to embed the editor cross-team without bundling React into every app, or when you want a single hosted version pinned to a URL.
 
-## 📦 Architecture
+The component still needs React and ReactDOM available — they're declared as peer dependencies on the underlying bundle.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  Host Application                        │
-│  (Any website, React, Vue, vanilla HTML, etc.)          │
-│                                                          │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │     <beatmap-editor> Web Component              │   │
-│  │     Loaded from GitHub Pages                    │   │
-│  │     (Independent deployment)                    │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
+## Loading the component
 
-## 🚀 Deployment Steps
-
-### 1. Create GitHub Repository
-
-Create a new repository (e.g., `beatmap-editor`) on GitHub.
-
-### 2. Push Code
+### Option 1: npm bundle
 
 ```bash
-# Initialize repo (if not already)
-git init
-git remote add origin https://github.com/YOUR_USERNAME/beatmap-editor.git
-
-# Commit and push
-git add .
-git commit -m "Initial commit"
-git push -u origin main
+npm install @gamewota/beatmap-editor
 ```
 
-### 3. Enable GitHub Pages
-
-1. Go to repository **Settings** → **Pages**
-2. Source: **GitHub Actions**
-3. The workflow file (`.github/workflows/deploy.yml`) is already configured
-
-### 4. Deploy
-
-Push to main branch triggers automatic deployment:
-
-```bash
-git push origin main
+```ts
+import '@gamewota/beatmap-editor/dist/beatmap-editor-wc.js'
+// <beatmap-editor> is now registered on window.customElements
 ```
 
-Or manually trigger from **Actions** tab → **Deploy to GitHub Pages**.
+You'll need to ship React + ReactDOM in the host page (they're external in this bundle).
 
-## 📖 Usage in Host Applications
+### Option 2: From GitHub Pages (hosted)
 
-### Option A: HTML/Vanilla JS
+The demo deploy at https://gamewota.github.io/beatmap-editor/ also serves the web-component bundle. Load it via `<script type="module">`:
+
+```html
+<script src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
+<script type="module"
+  src="https://gamewota.github.io/beatmap-editor/assets/beatmap-editor-wc.js">
+</script>
+```
+
+(File names on the Pages deploy include a hash — link from the live site's network panel for the current asset URL, or build locally and host the bundle yourself.)
+
+## Usage
+
+```html
+<beatmap-editor
+  bpm="175"
+  offset-ms="670"
+  snap-division="8"
+  zoom="100"
+  duration="180"
+  notes='[]'
+></beatmap-editor>
+```
+
+Then in JS:
+
+```js
+const editor = document.querySelector('beatmap-editor')
+
+// React to user edits
+editor.addEventListener('noteschange', (e) => {
+  console.log('notes:', e.detail.notes)
+})
+
+// Read current notes
+const json = editor.exportBeatmap()         // returns a JSON string
+const notes = JSON.parse(json)
+
+// Replace the notes
+editor.importBeatmap(JSON.stringify([
+  { id: 'n1', lane: 0, time: 0.67, type: 'tap' },
+  { id: 'n2', lane: 3, time: 2.04, type: 'tap' },
+]))
+
+// Or update attributes
+editor.setAttribute('bpm', '128')
+editor.setAttribute('snap-division', '4')
+```
+
+## Attributes
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `bpm` | int | `120` | Beats per minute |
+| `offset-ms` | int | `0` | Milliseconds before the first beat |
+| `snap-division` | int | `4` | `1`, `2`, `4`, `8`, or `16` — divides the whole note |
+| `zoom` | int | `100` | Zoom percentage (25–100 in the demo UI) |
+| `duration` | int | `300` | Audio length in seconds |
+| `notes` | JSON | `[]` | Internal `Note[]` array (the React shape — `{ id, lane, time, type, duration? }`); not the export schema |
+
+> The web component's internal `notes` attribute uses the React `Note` shape (time in seconds). If you want the export schema, call `editor.exportBeatmap()` and convert externally, or use the React component directly.
+
+## Events
+
+| Event | `detail` | When it fires |
+|---|---|---|
+| `noteschange` | `{ notes: Note[] }` | User added or deleted a note. The event bubbles and crosses the shadow boundary. |
+
+## Methods
+
+| Method | Returns | Notes |
+|---|---|---|
+| `exportBeatmap()` | `string` (JSON of `Note[]`) | Same shape as the `notes` attribute. |
+| `importBeatmap(json: string)` | `void` | Replaces internal notes; invalid JSON is logged and ignored. |
+
+## Framework examples
+
+### React host
+
+```jsx
+import { useEffect, useRef } from 'react'
+
+// Tell React this is a custom element with these props
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'beatmap-editor': any
+    }
+  }
+}
+
+export function Editor() {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => console.log(e.detail.notes)
+    const el = ref.current
+    el?.addEventListener('noteschange', handler)
+    return () => el?.removeEventListener('noteschange', handler)
+  }, [])
+
+  return (
+    <beatmap-editor
+      ref={ref}
+      bpm="128"
+      offset-ms="0"
+      snap-division="8"
+      duration="180"
+    />
+  )
+}
+```
+
+### Vue host
+
+```vue
+<template>
+  <beatmap-editor
+    bpm="128"
+    snap-division="8"
+    offset-ms="0"
+    duration="180"
+    @noteschange="onChange"
+  />
+</template>
+
+<script setup>
+const onChange = (e) => console.log(e.detail.notes)
+</script>
+```
+
+You'll need to mark `beatmap-editor` as a custom element in your Vue config (`compilerOptions.isCustomElement`).
+
+### Vanilla HTML
 
 ```html
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Load React (peer dependencies) -->
   <script src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
 </head>
 <body>
-  <!-- Use the web component -->
-  <beatmap-editor 
-    id="my-editor"
-    bpm="120"
-    snap-enabled="true"
-    snap-division="4"
-    offset-ms="0"
-    zoom="100">
-  </beatmap-editor>
+  <beatmap-editor id="editor" bpm="128" duration="180" snap-division="8"></beatmap-editor>
 
-  <!-- Load the microfrontend -->
+  <button id="export">Export</button>
+
   <script type="module">
-    import('https://YOUR_USERNAME.github.io/beatmap-editor/beatmap-editor.es.js');
-  </script>
+    import 'https://gamewota.github.io/beatmap-editor/assets/beatmap-editor-wc.js'
 
-  <script>
-    // Listen for note changes
-    document.addEventListener('noteschange', (e) => {
-      console.log('Notes:', e.detail.notes);
-    });
+    const editor = document.getElementById('editor')
+    editor.addEventListener('noteschange', e => console.log(e.detail.notes))
 
-    // Get reference to editor
-    const editor = document.getElementById('my-editor');
-    
-    // Change properties programmatically
-    editor.setAttribute('bpm', '140');
-    editor.setAttribute('offset-ms', '250');
-    
-    // Export notes
-    const notes = editor.exportBeatmap();
+    document.getElementById('export').onclick = () => {
+      const json = editor.exportBeatmap()
+      console.log(JSON.parse(json))
+    }
   </script>
 </body>
 </html>
 ```
 
-### Option B: React Application
+## Styling
 
-```jsx
-import { useEffect, useRef } from 'react';
+The component renders inside an open Shadow DOM. The library's compiled Tailwind stylesheet is injected at construction time, so the editor's own styles work without configuration.
 
-function App() {
-  const editorRef = useRef(null);
+Styling the **outside** of the element is unaffected — you can size or position it like any HTML element:
 
-  useEffect(() => {
-    // Load the web component script
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://YOUR_USERNAME.github.io/beatmap-editor/beatmap-editor.es.js';
-    document.head.appendChild(script);
-
-    // Listen for changes
-    const handleNotesChange = (e) => {
-      console.log('Notes changed:', e.detail.notes);
-    };
-    document.addEventListener('noteschange', handleNotesChange);
-
-    return () => {
-      document.removeEventListener('noteschange', handleNotesChange);
-    };
-  }, []);
-
-  const handleExport = () => {
-    if (editorRef.current) {
-      const notes = editorRef.current.exportBeatmap();
-      console.log(JSON.parse(notes));
-    }
-  };
-
-  return (
-    <div>
-      <h1>My Rhythm Game Editor</h1>
-      
-      {/* Embed the beatmap editor */}
-      <beatmap-editor 
-        ref={editorRef}
-        bpm="120"
-        snap-enabled="true"
-        snap-division="4"
-        offset-ms="0"
-        style={{ height: '500px', display: 'block' }}
-      />
-      
-      <button onClick={handleExport}>Export Beatmap</button>
-    </div>
-  );
+```css
+beatmap-editor {
+  display: block;
+  height: 500px;
+  border: 1px solid #ddd;
 }
 ```
 
-### Option C: iframe (Simplest)
+To restyle the editor's internals you'd need to fork the source — Shadow DOM intentionally isolates it.
 
-```html
-<iframe 
-  src="https://YOUR_USERNAME.github.io/beatmap-editor/demo.html"
-  width="100%"
-  height="600px"
-  style="border: none;">
-</iframe>
-```
+## Troubleshooting
 
-## ⚙️ Attributes
+| Symptom | Likely cause |
+|---|---|
+| Browser warns about unknown element | Forgot to load the web-component script, or it loaded before React. |
+| Editor renders but is blank | `duration` is `0` or `bpm` is `0`. Set both via attributes. |
+| `noteschange` not firing in React | React 19 dispatches custom events fine, but earlier React versions need `addEventListener` (used above) rather than `onNoteschange={...}`. |
+| Build error: `Cannot find name 'beatmap-editor'` in JSX | Add the global `JSX.IntrinsicElements` declaration shown in the React example. |
+| `exportBeatmap()` returns React-shape JSON, not the schema | That method returns the internal `Note[]`. Convert to the schema externally — see [INTEGRATION.md → Beatmap JSON schema](./INTEGRATION.md#beatmap-json-schema). |
 
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `bpm` | number | 120 | Beats per minute |
-| `snap-enabled` | boolean | true | Enable grid snapping |
-| `snap-division` | number | 4 | Snap divisions (1, 2, 4, 8, 16, 32) |
-| `offset-ms` | number | 0 | Grid offset in milliseconds |
-| `zoom` | number | 100 | Zoom percentage |
+## License
 
-## 📡 Events
-
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `noteschange` | `{ notes: Note[] }` | Fired when notes are added/deleted |
-
-## 🛠️ Local Development
-
-```bash
-# Install dependencies
-npm install
-
-# Dev server
-npm run dev
-
-# Build for production
-npm run build
-
-# Build as library (for microfrontend)
-npm run build:lib
-```
-
-## 📁 Build Outputs
-
-After building as library (`npm run build:lib`):
-
-```
-dist/
-├── beatmap-editor.es.js      # ES Module (modern browsers)
-├── beatmap-editor.umd.js     # UMD Module (legacy support)
-└── demo.html                 # Standalone demo page
-```
-
-## 🔗 Demo
-
-Live demo: `https://YOUR_USERNAME.github.io/beatmap-editor/demo.html`
-
-## 📝 Notes
-
-- The editor requires React and ReactDOM as peer dependencies
-- Tailwind CSS is included in the build
-- Audio file loading is handled by the host application
-- The web component is framework-agnostic (works with any frontend)
-
-## 🐛 Troubleshooting
-
-**CORS issues**: Ensure the host and microfrontend are on HTTPS.
-
-**Component not loading**: Check that React/ReactDOM are loaded before the web component script.
-
-**Styles not applying**: The web component uses Shadow DOM - styles are isolated.
-
-## 📄 License
-
-MIT License - Feel free to use in your rhythm games!
+MIT
